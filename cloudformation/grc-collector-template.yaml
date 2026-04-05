@@ -1,0 +1,977 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS GRC Evidence Collector with optional Bedrock AI Analysis'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  EnableAIAnalysis:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+  AlertEmail:
+    Type: String
+    Default: ""
+    Description: "Email for HIGH priority alerts (optional)"
+  ReportEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "Enable scheduled summary reports"
+  ReportEmail:
+    Type: String
+    Default: ""
+    Description: "Email address for scheduled reports (required if ReportEnabled is true)"
+  ReportSchedule:
+    Type: String
+    Default: "rate(1 day)"
+    Description: "Schedule expression for reports (e.g., 'rate(1 day)', 'cron(0 9 * * ? *)')"
+  # Batching configuration parameters
+  EnableMediumAlerts:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: "Enable MEDIUM priority batched alerts"
+  EnableLowAlerts:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: "Enable LOW priority batched alerts"
+  MediumBatchSize:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: "Number of MEDIUM events to batch before sending"
+  LowBatchSize:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: "Number of LOW events to batch before sending"
+  MediumBatchInterval:
+    Type: Number
+    Default: 15
+    MinValue: 1
+    MaxValue: 1440
+    Description: "Minutes to wait before sending MEDIUM batch"
+  LowBatchInterval:
+    Type: Number
+    Default: 60
+    MinValue: 1
+    MaxValue: 1440
+    Description: "Minutes to wait before sending LOW batch"
+  MaxEmailsPerHour:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: "Maximum emails per hour (rate limiting)"
+  UseBatching:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: "Enable batching for MEDIUM/LOW events"
+  LambdaCodeBucket:
+    Type: String
+    Default: ""
+    Description: "S3 bucket for Lambda code (auto-created if not provided)"
+
+Conditions:
+  IsAIEnabled: !Equals [!Ref EnableAIAnalysis, "true"]
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
+  IsReportEnabled: !Equals [!Ref ReportEnabled, "true"]
+  HasReportEmail: !Not [!Equals [!Ref ReportEmail, ""]]
+  ShouldCreateReportResources: !And [!Condition IsReportEnabled, !Condition HasReportEmail]
+
+Resources:
+  EvidenceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "grc-evidence-${AWS::AccountId}-${Environment}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  EvidenceBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref EvidenceBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${EvidenceBucket}"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${EvidenceBucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  MetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "GRC-Evidence-Metadata-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: evidence_id
+          AttributeType: S
+        - AttributeName: event_type
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: priority
+          AttributeType: S
+      KeySchema:
+        - AttributeName: evidence_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: EventTypeIndex
+          KeySchema:
+            - AttributeName: event_type
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: PriorityIndex
+          KeySchema:
+            - AttributeName: priority
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  PendingEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "GRC-Pending-Events-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: priority
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: PriorityTimestampIndex
+          KeySchema:
+            - AttributeName: priority
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: expiry_time
+        Enabled: true
+
+  RateLimitTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "GRC-Rate-Limit-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: hour
+          AttributeType: S
+      KeySchema:
+        - AttributeName: hour
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "GRC-Compliance-Alerts-${Environment}"
+
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      Endpoint: !Ref AlertEmail
+      Protocol: email
+      TopicArn: !Ref AlertTopic
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "GRC-Lambda-Role-${Environment}"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GRC-Lambda-Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${EvidenceBucket}/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${MetadataTable}*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${PendingEventsTable}*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${RateLimitTable}*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlertTopic
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "arn:aws:logs:*:*:*"
+              - !If
+                - IsAIEnabled
+                - Effect: Allow
+                  Action:
+                    - bedrock:InvokeModel
+                  Resource: "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+                  Condition:
+                    StringEquals:
+                      aws:RequestedRegion: "us-east-1"
+                - !Ref AWS::NoValue
+              - !If
+                - ShouldCreateReportResources
+                - Effect: Allow
+                  Action:
+                    - ses:SendEmail
+                    - ses:SendRawEmail
+                  Resource: "*"
+                - !Ref AWS::NoValue
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
+  EvidenceProcessor:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "GRC-Evidence-Processor-${Environment}"
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          import json
+          import uuid
+          import os
+          import logging
+          from datetime import datetime
+          import boto3
+
+          logger = logging.getLogger(__name__)
+          logger.setLevel(logging.INFO)
+
+          s3 = boto3.client('s3')
+          dynamodb = boto3.client('dynamodb')
+          sns = boto3.client('sns')
+          
+          EVIDENCE_BUCKET = os.environ.get('EVIDENCE_BUCKET')
+          METADATA_TABLE = os.environ.get('METADATA_TABLE')
+          ALERT_TOPIC_ARN = os.environ.get('ALERT_TOPIC_ARN')
+          ENABLE_AI = os.environ.get('ENABLE_AI', 'false').lower() == 'true'
+
+          if ENABLE_AI:
+              bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
+
+          HIGH_PRIORITY_EVENTS = {
+              'CreateUser', 'DeleteUser', 'AttachUserPolicy', 'DetachUserPolicy',
+              'CreateRole', 'DeleteRole', 'AttachRolePolicy', 'PutRolePolicy',
+              'CreateAccessKey', 'DeleteAccessKey', 'UpdateAccessKey',
+              'CreateSecurityGroup', 'DeleteSecurityGroup', 'AuthorizeSecurityGroupIngress',
+              'AuthorizeSecurityGroupEgress', 'RevokeSecurityGroupIngress',
+              'PutBucketPolicy', 'DeleteBucketPolicy', 'PutBucketAcl',
+              'PutBucketEncryption', 'DeleteBucketEncryption',
+              'CreateKey', 'DisableKey', 'ScheduleKeyDeletion',
+          }
+
+          MEDIUM_PRIORITY_EVENTS = {
+              'StartInstances', 'StopInstances', 'TerminateInstances',
+              'RunInstances', 'CreateTag', 'DeleteTag',
+              'CreateSnapshot', 'DeleteSnapshot',
+              'ModifyInstanceAttribute', 'ModifyNetworkInterfaceAttribute',
+          }
+
+          def get_priority(event_name: str, user_identity: dict) -> str:
+              if event_name in HIGH_PRIORITY_EVENTS:
+                  return 'HIGH'
+              if event_name == 'ConsoleLogin' and user_identity.get('type') == 'Root':
+                  return 'HIGH'
+              if event_name in MEDIUM_PRIORITY_EVENTS:
+                  return 'MEDIUM'
+              return 'LOW'
+
+          def derive_compliance_tags(event_name: str) -> list:
+              if any(x in event_name for x in ['User', 'Role', 'Policy', 'AccessKey', 'Login']):
+                  return ["PCI-DSS-8.3", "SOC2-CC6.1", "NIST-AC-2", "ISO27001-A.9"]
+              if any(x in event_name for x in ['Bucket']):
+                  return ["PCI-DSS-3.4", "SOC2-CC6.7"]
+              if any(x in event_name for x in ['SecurityGroup', 'Network']):
+                  return ["PCI-DSS-1.3", "SOC2-CC6.6"]
+              if any(x in event_name for x in ['Instance', 'Snapshot', 'Tag']):
+                  return ["PCI-DSS-6.4", "SOC2-CC7.1", "NIST-CM-3"]
+              return ["SOC2-CC6.8"]
+
+          def analyze_with_bedrock(event: dict, initial_priority: str) -> dict:
+              if initial_priority == 'LOW':
+                  return {"ai_analyzed": False, "reason": "LOW priority - skipped for cost"}
+              if not ENABLE_AI:
+                  return {"ai_analyzed": False, "reason": "AI analysis disabled"}
+              try:
+                  prompt = f"""You are a cloud security compliance analyst. Analyze this AWS CloudTrail event and provide a structured risk assessment.
+
+          CloudTrail Event:
+          {json.dumps(event, indent=2, default=str)}
+
+          Respond with ONLY valid JSON in this exact format:
+          {{
+            "risk_level": "LOW|MEDIUM|HIGH|CRITICAL",
+            "risk_score": 5,
+            "summary": "<one sentence description of what happened>",
+            "compliance_impact": ["<framework>: <control>"],
+            "anomaly_indicators": ["<indicator>"],
+            "recommended_action": "<specific action to take>",
+            "false_positive_likelihood": "LOW|MEDIUM|HIGH",
+            "investigation_priority": "IMMEDIATE|SAME_DAY|WEEKLY|MONITOR"
+          }}"""
+                  response = bedrock.invoke_model(
+                      modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                      contentType='application/json',
+                      accept='application/json',
+                      body=json.dumps({
+                          "anthropic_version": "bedrock-2023-05-31",
+                          "max_tokens": 600,
+                          "temperature": 0.1,
+                          "messages": [{"role": "user", "content": prompt}]
+                      })
+                  )
+                  result = json.loads(response['body'].read())
+                  ai_analysis = json.loads(result['content'][0]['text'])
+                  ai_analysis['ai_analyzed'] = True
+                  ai_analysis['model'] = 'anthropic.claude-3-sonnet-20240229-v1:0'
+                  ai_analysis['analyzed_at'] = datetime.utcnow().isoformat()
+                  return ai_analysis
+              except Exception as e:
+                  logger.warning(f"Bedrock analysis failed: {str(e)}")
+                  return {"ai_analyzed": False, "reason": f"Error: {str(e)}"}
+
+          def lambda_handler(event, context):
+              try:
+                  detail = event.get('detail', event)
+                  event_name = detail.get('eventName', 'Unknown')
+                  user_identity = detail.get('userIdentity', {})
+                  
+                  priority = get_priority(event_name, user_identity)
+                  evidence_id = str(uuid.uuid4())
+                  now = datetime.utcnow()
+                  
+                  evidence = {
+                      "evidence_id": evidence_id,
+                      "collected_at": now.isoformat(),
+                      "event_id": detail.get('eventID'),
+                      "event_name": event_name,
+                      "event_source": detail.get('eventSource'),
+                      "event_time": detail.get('eventTime'),
+                      "user_identity": user_identity,
+                      "source_ip": detail.get('sourceIPAddress'),
+                      "aws_region": detail.get('awsRegion'),
+                      "request_parameters": detail.get('requestParameters', {}),
+                      "response_elements": detail.get('responseElements', {}),
+                      "priority": priority,
+                      "compliance_tags": derive_compliance_tags(event_name),
+                      "raw_event": detail
+                  }
+                  
+                  ai_analysis = analyze_with_bedrock(detail, priority)
+                  evidence["ai_analysis"] = ai_analysis
+                  
+                  s3_key = f"evidence/{now.year}/{now.month:02d}/{now.day:02d}/{evidence_id}.json"
+                  if EVIDENCE_BUCKET:
+                      s3.put_object(
+                          Bucket=EVIDENCE_BUCKET,
+                          Key=s3_key,
+                          Body=json.dumps(evidence, default=str),
+                          ContentType='application/json'
+                      )
+                  
+                  ttl = int(now.timestamp()) + (90 * 24 * 60 * 60)
+                  if METADATA_TABLE:
+                      dynamodb.put_item(
+                          TableName=METADATA_TABLE,
+                          Item={
+                              'evidence_id': {'S': evidence_id},
+                              'timestamp': {'S': now.isoformat()},
+                              'event_type': {'S': event_name},
+                              'priority': {'S': priority},
+                              's3_key': {'S': s3_key},
+                              'ttl': {'N': str(ttl)}
+                          }
+                      )
+                      
+                  if priority == 'HIGH' and ALERT_TOPIC_ARN:
+                      alert_msg = evidence
+                      if ai_analysis.get('ai_analyzed'):
+                          alert_msg = {
+                              "Alert": f"HIGH Priority Event: {event_name}",
+                              "AI_Summary": ai_analysis.get('summary'),
+                              "Recommended_Action": ai_analysis.get('recommended_action'),
+                              "Risk_Level": ai_analysis.get('risk_level'),
+                              "Evidence_ID": evidence_id,
+                              "S3_Key": s3_key
+                          }
+                      sns.publish(
+                          TopicArn=ALERT_TOPIC_ARN,
+                          Subject=f"HIGH Priority GRC Alert: {event_name}",
+                          Message=json.dumps(alert_msg, indent=2, default=str)
+                      )
+                      
+                  return {
+                      "statusCode": 200,
+                      "evidence_id": evidence_id,
+                      "priority": priority,
+                      "s3_key": s3_key,
+                      "ai_analyzed": ai_analysis.get('ai_analyzed', False)
+                  }
+              except Exception as e:
+                  logger.error(f"Error processing event: {str(e)}")
+                  raise
+      Environment:
+        Variables:
+          EVIDENCE_BUCKET: !Ref EvidenceBucket
+          METADATA_TABLE: !Ref MetadataTable
+          ALERT_TOPIC_ARN: !Ref AlertTopic
+          ENABLE_AI: !Ref EnableAIAnalysis
+          ENVIRONMENT: !Ref Environment
+          PENDING_EVENTS_TABLE: !Ref PendingEventsTable
+          USE_BATCHING: !Ref UseBatching
+          ENABLE_MEDIUM_ALERTS: !Ref EnableMediumAlerts
+          ENABLE_LOW_ALERTS: !Ref EnableLowAlerts
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EvidenceProcessor
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ComplianceEventRule.Arn
+
+  ComplianceEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "GRC-CloudTrail-Rule-${Environment}"
+      EventPattern:
+        source:
+          - aws.cloudtrail
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt EvidenceProcessor.Arn
+          Id: "1"
+
+  ComplianceTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: EvidenceBucketPolicy
+    Properties:
+      TrailName: !Sub "GRC-Trail-${Environment}"
+      IsLogging: true
+      S3BucketName: !Ref EvidenceBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: false
+
+  # Scheduled Report Generator (conditional)
+  ReportGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Condition: ShouldCreateReportResources
+    DependsOn: LambdaExecutionRole
+    Properties:
+      FunctionName: !Sub "GRC-Report-Generator-${Environment}"
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          import json
+          import logging
+          import os
+          from datetime import datetime, timedelta
+          from typing import Dict, List, Optional
+          import boto3
+          from botocore.exceptions import ClientError
+          
+          logger = logging.getLogger(__name__)
+          logger.setLevel(logging.INFO)
+          
+          dynamodb = boto3.client('dynamodb')
+          s3 = boto3.client('s3')
+          ses = boto3.client('ses')
+          
+          REPORT_EMAIL = os.environ.get('REPORT_EMAIL')
+          REPORT_DAYS = int(os.environ.get('REPORT_DAYS', '1'))
+          DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE')
+          S3_BUCKET = os.environ.get('S3_BUCKET')
+          FROM_EMAIL = os.environ.get('FROM_EMAIL', 'no-reply@aws-grc.local')
+          
+          def dynamodb_item_to_dict(item: Dict) -> Dict:
+              result = {}
+              for key, value in item.items():
+                  if 'S' in value:
+                      result[key] = value['S']
+                  elif 'N' in value:
+                      result[key] = int(value['N'])
+                  elif 'BOOL' in value:
+                      result[key] = value['BOOL']
+                  elif 'M' in value:
+                      result[key] = dynamodb_item_to_dict(value['M'])
+                  elif 'L' in value:
+                      result[key] = [
+                          (dynamodb_item_to_dict(v) if 'M' in v else v.get('S', v.get('N', v)))
+                          for v in value['L']
+                      ]
+                  elif 'SS' in value:
+                      result[key] = value['SS']
+                  elif 'NS' in value:
+                      result[key] = [int(n) for n in value['NS']]
+              return result
+          
+          def fetch_event_from_s3(s3_key: str) -> Optional[Dict]:
+              if not S3_BUCKET:
+                  return None
+              try:
+                  response = s3.get_object(Bucket=S3_BUCKET, Key=s3_key)
+                  event_data = json.loads(response['Body'].read().decode('utf-8'))
+                  return event_data
+              except ClientError as e:
+                  if e.response['Error']['Code'] == 'NoSuchKey':
+                      logger.warning(f"Event not found in S3: {s3_key}")
+                  else:
+                      logger.warning(f"Error fetching event from S3: {e}")
+                  return None
+              except Exception as e:
+                  logger.warning(f"Unexpected error fetching event from S3: {e}")
+                  return None
+          
+          def query_events(days: int = 1) -> List[Dict]:
+              logger.info(f"Querying DynamoDB for events in the last {days} day(s)")
+              end_time = datetime.utcnow()
+              start_time = end_time - timedelta(days=days)
+              logger.info(f"Time range: {start_time.isoformat()} to {end_time.isoformat()}")
+              events = []
+              try:
+                  response = dynamodb.scan(
+                      TableName=DYNAMODB_TABLE,
+                      FilterExpression='#ts BETWEEN :start AND :end',
+                      ExpressionAttributeNames={'#ts': 'timestamp'},
+                      ExpressionAttributeValues={
+                          ':start': {'S': start_time.isoformat()},
+                          ':end': {'S': end_time.isoformat()},
+                      },
+                  )
+                  items = response.get('Items', [])
+                  logger.info(f"Found {len(items)} events in DynamoDB")
+                  for item in items:
+                      event = dynamodb_item_to_dict(item)
+                      if S3_BUCKET and 's3_key' in event:
+                          full_event = fetch_event_from_s3(event['s3_key'])
+                          if full_event:
+                              event.update(full_event)
+                      events.append(event)
+                  events.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+              except ClientError as e:
+                  logger.error(f"Error querying DynamoDB: {e}")
+                  raise
+              except Exception as e:
+                  logger.error(f"Unexpected error querying events: {e}")
+                  raise
+              return events
+          
+          def aggregate_events(events: List[Dict]) -> Dict:
+              logger.info("Aggregating events by priority")
+              aggregated = {
+                  'total': len(events),
+                  'by_priority': {'HIGH': [], 'MEDIUM': [], 'LOW': []},
+                  'statistics': {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0},
+                  'compliance_frameworks': set(),
+                  'event_types': {},
+              }
+              for event in events:
+                  priority = event.get('priority', 'LOW')
+                  if priority in aggregated['by_priority']:
+                      aggregated['by_priority'][priority].append(event)
+                      aggregated['statistics'][priority] += 1
+                  if 'compliance_tags' in event:
+                      for tag in event['compliance_tags']:
+                          aggregated['compliance_frameworks'].add(tag)
+                  event_type = event.get('event_type', event.get('event_name', 'Unknown'))
+                  aggregated['event_types'][event_type] = aggregated['event_types'].get(event_type, 0) + 1
+              aggregated['compliance_frameworks'] = sorted(list(aggregated['compliance_frameworks']))
+              logger.info(f"Aggregated {aggregated['total']} events:")
+              logger.info(f"  - HIGH: {aggregated['statistics']['HIGH']}")
+              logger.info(f"  - MEDIUM: {aggregated['statistics']['MEDIUM']}")
+              logger.info(f"  - LOW: {aggregated['statistics']['LOW']}")
+              return aggregated
+          
+          def generate_html_report(aggregated: Dict, time_range: str) -> str:
+              logger.info("Generating HTML report")
+              high_count = aggregated['statistics']['HIGH']
+              medium_count = aggregated['statistics']['MEDIUM']
+              low_count = aggregated['statistics']['LOW']
+              total_count = aggregated['total']
+              
+              events_html = ""
+              for priority in ['HIGH', 'MEDIUM', 'LOW']:
+                  events = aggregated['by_priority'][priority]
+                  if not events:
+                      events_html += f'<div class="section"><h2>{priority} PRIORITY EVENTS</h2><p>No {priority.lower()} priority events found.</p></div>'
+                  else:
+                      events_html += f'<div class="section"><h2>{priority} PRIORITY EVENTS ({len(events)})</h2><ul>'
+                      for event in events:
+                          event_name = event.get('event_name', event.get('event_type', 'Unknown'))
+                          event_time = event.get('event_time', event.get('timestamp', 'Unknown'))
+                          user_identity = event.get('user_identity', {})
+                          username = user_identity.get('userName', user_identity.get('principalId', 'Unknown'))
+                          source_ip = event.get('source_ip', event.get('sourceIPAddress', 'N/A'))
+                          aws_region = event.get('aws_region', event.get('awsRegion', 'N/A'))
+                          evidence_id = event.get('evidence_id', 'N/A')
+                          events_html += f'<li><strong>{event_name}</strong> - {event_time} - User: {username} - IP: {source_ip} - Region: {aws_region} - ID: {evidence_id}</li>'
+                      events_html += '</ul></div>'
+              
+              html = f"""<!DOCTYPE html>
+              <html><head><title>GRC Report</title>
+              <style>body{{font-family:Arial,sans-serif;max-width:800px;margin:20px auto;padding:20px;}}
+              .header{{background:#667eea;color:white;padding:20px;border-radius:8px;}}
+              .summary{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:20px 0;}}
+              .card{{background:#f8f9fa;padding:15px;text-align:center;border-radius:8px;}}
+              .card.high{{border-left:4px solid #dc3545;}}
+              .card.medium{{border-left:4px solid #ffc107;}}
+              .card.low{{border-left:4px solid #28a745;}}
+              .section{{margin:20px 0;}}
+              ul{{list-style:none;padding:0;}}
+              li{{background:#f8f9fa;padding:10px;margin:5px 0;border-radius:4px;}}</style>
+              </head><body>
+              <div class="header"><h1>🛡️ GRC Evidence Collector Report</h1>
+              <p>Time Range: {time_range}</p>
+              <p>Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}</p></div>
+              <div class="summary">
+              <div class="card"><h3>Total</h3><div style="font-size:24px;font-weight:bold;">{total_count}</div></div>
+              <div class="card high"><h3>High</h3><div style="font-size:24px;font-weight:bold;">{high_count}</div></div>
+              <div class="card medium"><h3>Medium</h3><div style="font-size:24px;font-weight:bold;">{medium_count}</div></div>
+              <div class="card low"><h3>Low</h3><div style="font-size:24px;font-weight:bold;">{low_count}</div></div>
+              </div>
+              {events_html}
+              <p style="text-align:center;color:#666;margin-top:30px;">Generated by AWS GRC Evidence Collector</p>
+              </body></html>"""
+              logger.info("HTML report generated")
+              return html
+          
+          def generate_text_report(aggregated: Dict, time_range: str) -> str:
+              logger.info("Generating text report")
+              lines = [
+                  "=" * 70,
+                  "AWS GRC EVIDENCE COLLECTOR REPORT",
+                  "=" * 70,
+                  f"Time Range: {time_range}",
+                  f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+                  "",
+                  "-" * 70,
+                  "SUMMARY",
+                  "-" * 70,
+                  f"Total Events: {aggregated['total']}",
+                  f"  - HIGH Priority: {aggregated['statistics']['HIGH']}",
+                  f"  - MEDIUM Priority: {aggregated['statistics']['MEDIUM']}",
+                  f"  - LOW Priority: {aggregated['statistics']['LOW']}",
+                  "",
+              ]
+              for priority in ['HIGH', 'MEDIUM', 'LOW']:
+                  events = aggregated['by_priority'][priority]
+                  if events:
+                      lines.extend(["-" * 70, f"{priority} PRIORITY EVENTS ({len(events)})", "-" * 70, ""])
+                      for i, event in enumerate(events, 1):
+                          event_name = event.get('event_name', event.get('event_type', 'Unknown'))
+                          event_time = event.get('event_time', event.get('timestamp', 'Unknown'))
+                          user_identity = event.get('user_identity', {})
+                          username = user_identity.get('userName', user_identity.get('principalId', 'Unknown'))
+                          source_ip = event.get('source_ip', event.get('sourceIPAddress', 'N/A'))
+                          aws_region = event.get('aws_region', event.get('awsRegion', 'N/A'))
+                          evidence_id = event.get('evidence_id', 'N/A')
+                          lines.append(f"{i}. {event_name}")
+                          lines.append(f"   Time: {event_time}")
+                          lines.append(f"   User: {username}")
+                          lines.append(f"   Source IP: {source_ip}")
+                          lines.append(f"   Region: {aws_region}")
+                          lines.append(f"   Evidence ID: {evidence_id}")
+                          lines.append("")
+              lines.extend(["=" * 70, "END OF REPORT", "=" * 70, "Generated by AWS GRC Evidence Collector"])
+              text = "\n".join(lines)
+              logger.info("Text report generated")
+              return text
+          
+          def send_email(to_email: str, from_email: str, subject: str, html_body: str, text_body: str) -> bool:
+              logger.info(f"Sending email to {to_email}")
+              try:
+                  response = ses.send_email(
+                      Source=from_email,
+                      Destination={"ToAddresses": [to_email]},
+                      Message={
+                          "Subject": {"Data": subject, "Charset": "UTF-8"},
+                          "Body": {
+                              "Html": {"Data": html_body, "Charset": "UTF-8"},
+                              "Text": {"Data": text_body, "Charset": "UTF-8"},
+                          },
+                      },
+                  )
+                  message_id = response["MessageId"]
+                  logger.info(f"Email sent successfully! Message ID: {message_id}")
+                  return True
+              except ClientError as e:
+                  logger.error(f"Error sending email: {e}")
+                  return False
+              except Exception as e:
+                  logger.error(f"Unexpected error sending email: {e}")
+                  return False
+          
+          def lambda_handler(event, context):
+              logger.info("Starting scheduled report generation")
+              if not REPORT_EMAIL:
+                  logger.error("REPORT_EMAIL environment variable is not set")
+                  return {"statusCode": 500, "body": json.dumps({"error": "REPORT_EMAIL not set"})}
+              if not DYNAMODB_TABLE:
+                  logger.error("DYNAMODB_TABLE environment variable is not set")
+                  return {"statusCode": 500, "body": json.dumps({"error": "DYNAMODB_TABLE not set"})}
+              try:
+                  time_range = f"Last {REPORT_DAYS} day(s)"
+                  events = query_events(days=REPORT_DAYS)
+                  if not events:
+                      logger.info("No events found")
+                      aggregated = {
+                          'total': 0,
+                          'by_priority': {'HIGH': [], 'MEDIUM': [], 'LOW': []},
+                          'statistics': {'HIGH': 0, 'MEDIUM': 0, 'LOW': 0},
+                          'compliance_frameworks': [],
+                          'event_types': {},
+                      }
+                  else:
+                      aggregated = aggregate_events(events)
+                  html_report = generate_html_report(aggregated, time_range)
+                  text_report = generate_text_report(aggregated, time_range)
+                  high_count = aggregated["statistics"]["HIGH"]
+                  medium_count = aggregated["statistics"]["MEDIUM"]
+                  total_count = aggregated["total"]
+                  if high_count > 0:
+                      subject = f"🚨 GRC Report: {high_count} HIGH, {medium_count} MEDIUM, {total_count} Total Events"
+                  else:
+                      subject = f"📊 GRC Report: {total_count} Events ({time_range})"
+                  success = send_email(REPORT_EMAIL, FROM_EMAIL, subject, html_report, text_report)
+                  if success:
+                      logger.info("Report generation completed successfully")
+                      return {
+                          "statusCode": 200,
+                          "body": json.dumps({
+                              "message": "Report sent successfully",
+                              "total_events": total_count,
+                              "high_priority": high_count,
+                              "medium_priority": medium_count,
+                              "low_priority": aggregated["statistics"]["LOW"],
+                          }),
+                      }
+                  else:
+                      logger.error("Failed to send report")
+                      return {"statusCode": 500, "body": json.dumps({"error": "Failed to send report"})}
+              except Exception as e:
+                  logger.error(f"Error generating report: {e}", exc_info=True)
+                  return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+      Environment:
+        Variables:
+          REPORT_EMAIL: !Ref ReportEmail
+          REPORT_DAYS: "1"
+          DYNAMODB_TABLE: !Ref MetadataTable
+          S3_BUCKET: !Ref EvidenceBucket
+          FROM_EMAIL: "no-reply@aws-grc.local"
+
+  ReportGeneratorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: ShouldCreateReportResources
+    Properties:
+      FunctionName: !Ref ReportGeneratorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ReportScheduleRule.Arn
+
+  ReportScheduleRule:
+    Type: AWS::Events::Rule
+    Condition: ShouldCreateReportResources
+    DependsOn: ReportGeneratorFunction
+    Properties:
+      Name: !Sub "GRC-Report-Schedule-${Environment}"
+      ScheduleExpression: !Ref ReportSchedule
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReportGeneratorFunction.Arn
+          Id: "1"
+
+  # Batch Processor for MEDIUM/LOW priority events
+  BatchProcessorFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionRole
+    Properties:
+      FunctionName: !Sub "GRC-Batch-Processor-${Environment}"
+      Runtime: python3.11
+      Handler: batch_processor.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: "lambda/batch_processor.zip"
+      Environment:
+        Variables:
+          PENDING_EVENTS_TABLE: !Ref PendingEventsTable
+          RATE_LIMIT_TABLE: !Ref RateLimitTable
+          ALERT_EMAIL: !Ref AlertEmail
+          FROM_EMAIL: "no-reply@aws-grc.local"
+          ENABLE_MEDIUM_ALERTS: !Ref EnableMediumAlerts
+          ENABLE_LOW_ALERTS: !Ref EnableLowAlerts
+          MEDIUM_BATCH_SIZE: !Ref MediumBatchSize
+          LOW_BATCH_SIZE: !Ref LowBatchSize
+          MEDIUM_BATCH_INTERVAL: !Ref MediumBatchInterval
+          LOW_BATCH_INTERVAL: !Ref LowBatchInterval
+          MAX_EMAILS_PER_HOUR: !Ref MaxEmailsPerHour
+          USE_BATCHING: !Ref UseBatching
+
+  BatchProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BatchProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BatchScheduleRule.Arn
+
+  BatchScheduleRule:
+    Type: AWS::Events::Rule
+    DependsOn: BatchProcessorFunction
+    Properties:
+      Name: !Sub "GRC-Batch-Schedule-${Environment}"
+      ScheduleExpression: "rate(5 minutes)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt BatchProcessorFunction.Arn
+          Id: "1"
+
+Outputs:
+  EvidenceBucketName:
+    Value: !Ref EvidenceBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-EvidenceBucketName"
+  MetadataTableName:
+    Value: !Ref MetadataTable
+    Export:
+      Name: !Sub "${AWS::StackName}-MetadataTableName"
+  LambdaFunctionArn:
+    Value: !GetAtt EvidenceProcessor.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+  LambdaFunctionName:
+    Value: !Ref EvidenceProcessor
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+  StackStatus:
+    Value: "Deployed"
+    Description: "GRC Evidence Collector deployment status"
+  ReportGeneratorFunctionArn:
+    Condition: ShouldCreateReportResources
+    Value: !GetAtt ReportGeneratorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportGeneratorFunctionArn"
+  ReportGeneratorFunctionName:
+    Condition: ShouldCreateReportResources
+    Value: !Ref ReportGeneratorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportGeneratorFunctionName"
+  PendingEventsTableName:
+    Value: !Ref PendingEventsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-PendingEventsTableName"
+  RateLimitTableName:
+    Value: !Ref RateLimitTable
+    Export:
+      Name: !Sub "${AWS::StackName}-RateLimitTableName"
+  BatchProcessorFunctionArn:
+    Value: !GetAtt BatchProcessorFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-BatchProcessorFunctionArn"
+  BatchProcessorFunctionName:
+    Value: !Ref BatchProcessorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-BatchProcessorFunctionName"
