@@ -10,6 +10,11 @@
 
 The AWS GRC Evidence Collector is a **fully automated, serverless GRC (Governance, Risk, and Compliance) evidence collection and reporting platform** built entirely on native AWS services. It eliminates the need for expensive SaaS GRC tools by automating evidence collection, risk analysis, remediation, and comprehensive compliance reporting for cloud infrastructure.
 
+
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/029f5e1a-0493-44f8-a87f-752f2466f16a" />
+
+
+
 ### The Problem It Solves
 
 Traditional GRC processes are **manual, time-consuming, and error-prone**:
@@ -108,6 +113,11 @@ This platform represents a **paradigm shift** from traditional GRC to **GRC Engi
 **This is not a tool - it's a methodology.**
 
 ---
+
+
+<img width="1146" height="670" alt="image" src="https://github.com/user-attachments/assets/b569a447-fb18-482c-8f8d-6cd770e9537d" />
+
+
 
 ## 🏗️ Technical Architecture
 
@@ -757,6 +767,25 @@ aws dynamodb query \
 4. **Reduce Config Rules**: Disable unnecessary Config rules in non-production
 5. **Use Free Tier**: Maximize AWS Free Tier benefits
 6. **Monitor Costs**: Set up AWS Budgets and CloudWatch alarms
+
+
+<img width="1263" height="546" alt="image" src="https://github.com/user-attachments/assets/0ba54753-ccfb-404e-bc72-90ef2d5ad7f7" />
+
+
+
+<img width="1098" height="830" alt="image" src="https://github.com/user-attachments/assets/e811e7e0-8b3b-4474-a2d2-97281b2fdf2a" />
+
+
+
+<img width="1181" height="860" alt="image" src="https://github.com/user-attachments/assets/3f7979ed-bfe2-4fe8-96d5-ceb750c96f72" />
+
+
+
+<img width="1135" height="767" alt="image" src="https://github.com/user-attachments/assets/0084fdeb-d014-4910-956f-e1dafb7c4045" />
+
+
+<img width="1517" height="689" alt="image" src="https://github.com/user-attachments/assets/184b8bbb-9d7d-4290-9467-056468ea7b13" />
+
 
 ---
 
