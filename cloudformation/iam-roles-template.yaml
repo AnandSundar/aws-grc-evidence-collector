@@ -1,0 +1,556 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  GRC Evidence Platform v2.0 - IAM Roles Template
+  
+  This template creates all IAM roles for the GRC Evidence Platform with
+  least-privilege policies. This template is designed to be deployed
+  separately for modularity and can be referenced by the master template.
+  
+  Author: GRC Platform Team
+  Version: 2.0
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - Environment
+      - Label:
+          default: Resource References
+        Parameters:
+          - EvidenceBucketArn
+          - MetadataTableArn
+          - RemediationLogTableArn
+          - ScorecardTableArn
+          - PendingEventsTableArn
+          - ReportsBucketArn
+          - AlertTopicArn
+          - KMSKeyArn
+    ParameterLabels:
+      Environment:
+        default: Deployment Environment
+      EvidenceBucketArn:
+        default: Evidence S3 Bucket ARN
+      MetadataTableArn:
+        default: Metadata DynamoDB Table ARN
+      RemediationLogTableArn:
+        default: Remediation Log DynamoDB Table ARN
+      ScorecardTableArn:
+        default: Scorecard DynamoDB Table ARN
+      PendingEventsTableArn:
+        default: Pending Events DynamoDB Table ARN
+      ReportsBucketArn:
+        default: Reports S3 Bucket ARN
+      AlertTopicArn:
+        default: Alert SNS Topic ARN
+      KMSKeyArn:
+        default: KMS Encryption Key ARN
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment (dev, staging, or prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+    
+  EvidenceBucketArn:
+    Type: String
+    Description: ARN of the Evidence S3 bucket
+    
+  MetadataTableArn:
+    Type: String
+    Description: ARN of the Metadata DynamoDB table
+    
+  RemediationLogTableArn:
+    Type: String
+    Description: ARN of the Remediation Log DynamoDB table
+    
+  ScorecardTableArn:
+    Type: String
+    Description: ARN of the Scorecard DynamoDB table
+    
+  PendingEventsTableArn:
+    Type: String
+    Description: ARN of the Pending Events DynamoDB table
+    
+  ReportsBucketArn:
+    Type: String
+    Description: ARN of the Reports S3 bucket
+    
+  AlertTopicArn:
+    Type: String
+    Description: ARN of the Alert SNS topic (leave empty if not used)
+    Default: ""
+    
+  KMSKeyArn:
+    Type: String
+    Description: ARN of the KMS encryption key
+
+Conditions:
+  HasAlertTopic: !Not [!Equals [!Ref AlertTopicArn, ""]]
+  IsProduction: !Equals [!Ref Environment, "prod"]
+
+Resources:
+  # ============================================================================
+  # IAM ROLES
+  # ============================================================================
+
+  # 1. Evidence Processor Role
+  EvidenceProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-evidence-processor-${Environment}"
+      Description: IAM role for Evidence Processor Lambda - least privilege
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EvidenceProcessorS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3WriteEvidence
+                Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Ref EvidenceBucketArn
+                  - !Sub "${EvidenceBucketArn}/*"
+        - PolicyName: EvidenceProcessorDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBWriteMetadata
+                Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:GetItem'
+                Resource:
+                  - !Ref MetadataTableArn
+                  - !Sub "${MetadataTableArn}/index/*"
+                  - !Ref PendingEventsTableArn
+                  - !Sub "${PendingEventsTableArn}/index/*"
+        - PolicyName: EvidenceProcessorSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SNSPublishAlerts
+                Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !If [HasAlertTopic, !Ref AlertTopicArn, !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:dummy"]
+        - PolicyName: EvidenceProcessorKMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSDecryptEncrypt
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !Ref KMSKeyArn
+        - PolicyName: EvidenceProcessorBedrockPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action: 'bedrock:InvokeModel'
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"
+                Condition:
+                  StringEquals:
+                    'aws:PrincipalTag/Environment': !Ref Environment
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-evidence-processor-role"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 2. Remediation Engine Role
+  RemediationEngineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-remediation-engine-${Environment}"
+      Description: IAM role for Remediation Engine Lambda - with safety guardrails
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RemediationEngineS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3ReadWrite
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:PutBucketEncryption'
+                  - 's3:PutPublicAccessBlock'
+                  - 's3:GetBucketEncryption'
+                  - 's3:GetPublicAccessBlock'
+                Resource:
+                  - !Ref EvidenceBucketArn
+                  - !Sub "${EvidenceBucketArn}/*"
+        - PolicyName: RemediationEngineDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBReadWrite
+                Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource:
+                  - !Ref MetadataTableArn
+                  - !Sub "${MetadataTableArn}/index/*"
+                  - !Ref RemediationLogTableArn
+                  - !Sub "${RemediationLogTableArn}/index/*"
+        - PolicyName: RemediationEngineSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SNSPublish
+                Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !If [HasAlertTopic, !Ref AlertTopicArn, !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:dummy"]
+        - PolicyName: RemediationEngineEC2Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: EC2Remediation
+                Effect: Allow
+                Action:
+                  - 'ec2:RevokeSecurityGroupIngress'
+                  - 'ec2:RevokeSecurityGroupEgress'
+                  - 'ec2:DescribeSecurityGroups'
+                  - 'ec2:DescribeSecurityGroupRules'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'aws:RequestedRegion': !Ref AWS::Region
+        - PolicyName: RemediationEngineIAMPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: IAMRemediation
+                Effect: Allow
+                Action:
+                  - 'iam:UpdateAccessKey'
+                  - 'iam:ListAccessKeys'
+                  - 'iam:GetUser'
+                  - 'iam:GetAccessKeyLastUsed'
+                Resource: !Sub "arn:aws:iam::${AWS::AccountId}:user/*"
+        - PolicyName: RemediationEngineRDSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: RDSRemediation
+                Effect: Allow
+                Action:
+                  - 'rds:ModifyDBInstance'
+                  - 'rds:DescribeDBInstances'
+                  - 'rds:ListTagsForResource'
+                Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db/*"
+        - PolicyName: RemediationEngineKMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSRemediation
+                Effect: Allow
+                Action:
+                  - 'kms:EnableKeyRotation'
+                  - 'kms:DescribeKey'
+                  - 'kms:GetKeyRotationStatus'
+                Resource: !Ref KMSKeyArn
+        - PolicyName: RemediationEngineDenyCriticalPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DenyCriticalResources
+                Effect: Deny
+                Action:
+                  - 'iam:DeleteUser'
+                  - 'iam:DeleteRole'
+                  - 'iam:DeletePolicy'
+                  - 'iam:DeleteAccessKey'
+                  - 'ec2:TerminateInstances'
+                  - 'ec2:StopInstances'
+                  - 'rds:DeleteDBInstance'
+                  - 'rds:StopDBInstance'
+                  - 's3:DeleteBucket'
+                  - 's3:DeleteObject'
+                  - 'kms:ScheduleKeyDeletion'
+                  - 'kms:DisableKey'
+                  - 'kms:DeleteKey'
+                Resource: '*'
+        - PolicyName: RemediationEngineKMSEncryptPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSDecryptEncrypt
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:Encrypt'
+                Resource: !Ref KMSKeyArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-remediation-engine-role"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 3. Scorecard Generator Role
+  ScorecardGeneratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scorecard-generator-${Environment}"
+      Description: IAM role for Scorecard Generator Lambda - read-only + SNS publish
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ScorecardGeneratorDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBRead
+                Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource:
+                  - !Ref MetadataTableArn
+                  - !Sub "${MetadataTableArn}/index/*"
+                  - !Ref RemediationLogTableArn
+                  - !Sub "${RemediationLogTableArn}/index/*"
+                  - !Ref ScorecardTableArn
+                  - !Sub "${ScorecardTableArn}/index/*"
+        - PolicyName: ScorecardGeneratorS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3ReadWrite
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Ref EvidenceBucketArn
+                  - !Sub "${EvidenceBucketArn}/*"
+                  - !Ref ReportsBucketArn
+                  - !Sub "${ReportsBucketArn}/*"
+        - PolicyName: ScorecardGeneratorSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SNSPublish
+                Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !If [HasAlertTopic, !Ref AlertTopicArn, !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:dummy"]
+        - PolicyName: ScorecardGeneratorKMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSDecryptEncrypt
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:Encrypt'
+                Resource: !Ref KMSKeyArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-scorecard-generator-role"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 4. Aging Monitor Role
+  AgingMonitorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-aging-monitor-${Environment}"
+      Description: IAM role for Evidence Aging Monitor Lambda - DynamoDB read + SNS publish
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AgingMonitorDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBReadWrite
+                Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource:
+                  - !Ref MetadataTableArn
+                  - !Sub "${MetadataTableArn}/index/*"
+        - PolicyName: AgingMonitorSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SNSPublish
+                Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !If [HasAlertTopic, !Ref AlertTopicArn, !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:dummy"]
+        - PolicyName: AgingMonitorKMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSDecryptEncrypt
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !Ref KMSKeyArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-aging-monitor-role"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 5. Report Exporter Role
+  ReportExporterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-report-exporter-${Environment}"
+      Description: IAM role for Report Exporter Lambda - S3 read + S3 write reports + SNS publish
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReportExporterDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: DynamoDBRead
+                Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource:
+                  - !Ref MetadataTableArn
+                  - !Sub "${MetadataTableArn}/index/*"
+                  - !Ref RemediationLogTableArn
+                  - !Sub "${RemediationLogTableArn}/index/*"
+                  - !Ref ScorecardTableArn
+                  - !Sub "${ScorecardTableArn}/index/*"
+        - PolicyName: ReportExporterS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: S3ReadWrite
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                  - 's3:DeleteObject'
+                Resource:
+                  - !Ref EvidenceBucketArn
+                  - !Sub "${EvidenceBucketArn}/*"
+                  - !Ref ReportsBucketArn
+                  - !Sub "${ReportsBucketArn}/*"
+        - PolicyName: ReportExporterSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: SNSPublish
+                Effect: Allow
+                Action: 'sns:Publish'
+                Resource: !If [HasAlertTopic, !Ref AlertTopicArn, !Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:dummy"]
+        - PolicyName: ReportExporterKMSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: KMSDecryptEncrypt
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                  - 'kms:Encrypt'
+                Resource: !Ref KMSKeyArn
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-report-exporter-role"
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  EvidenceProcessorRoleArn:
+    Description: ARN of the Evidence Processor IAM role
+    Value: !GetAtt EvidenceProcessorRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EvidenceProcessorRoleArn"
+
+  RemediationEngineRoleArn:
+    Description: ARN of the Remediation Engine IAM role
+    Value: !GetAtt RemediationEngineRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-RemediationEngineRoleArn"
+
+  ScorecardGeneratorRoleArn:
+    Description: ARN of the Scorecard Generator IAM role
+    Value: !GetAtt ScorecardGeneratorRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ScorecardGeneratorRoleArn"
+
+  AgingMonitorRoleArn:
+    Description: ARN of the Aging Monitor IAM role
+    Value: !GetAtt AgingMonitorRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-AgingMonitorRoleArn"
+
+  ReportExporterRoleArn:
+    Description: ARN of the Report Exporter IAM role
+    Value: !GetAtt ReportExporterRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportExporterRoleArn"

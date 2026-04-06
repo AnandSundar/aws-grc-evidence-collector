@@ -1,0 +1,312 @@
+{
+    "iam_credential_report": {
+        "users": [
+            {
+                "user": "<root_account>",
+                "arn": "arn:aws:iam::123456789012:root",
+                "user_creation_time": "2020-01-01T00:00:00+00:00",
+                "password_enabled": "not_supported",
+                "password_last_used": "2024-01-15T10:00:00+00:00",
+                "password_last_changed": "not_supported",
+                "password_next_rotation": "not_supported",
+                "mfa_active": "true",
+                "access_key_1_active": "false",
+                "access_key_1_last_rotated": "N/A",
+                "access_key_1_last_used_date": "N/A",
+                "access_key_1_last_used_region": "N/A",
+                "access_key_1_last_used_service": "N/A",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "admin-user",
+                "arn": "arn:aws:iam::123456789012:user/admin-user",
+                "user_creation_time": "2023-06-15T14:30:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2024-01-14T16:45:00+00:00",
+                "password_last_changed": "2023-12-01T09:00:00+00:00",
+                "password_next_rotation": "2024-03-01T09:00:00+00:00",
+                "mfa_active": "true",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2023-11-15T10:30:00+00:00",
+                "access_key_1_last_used_date": "2024-01-15T11:20:00+00:00",
+                "access_key_1_last_used_region": "us-east-1",
+                "access_key_1_last_used_service": "ec2",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "dev-user",
+                "arn": "arn:aws:iam::123456789012:user/dev-user",
+                "user_creation_time": "2023-08-20T08:15:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2024-01-15T09:30:00+00:00",
+                "password_last_changed": "2023-10-10T14:00:00+00:00",
+                "password_next_rotation": "2024-01-10T14:00:00+00:00",
+                "mfa_active": "true",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2023-09-01T11:00:00+00:00",
+                "access_key_1_last_used_date": "2024-01-14T18:45:00+00:00",
+                "access_key_1_last_used_region": "us-west-2",
+                "access_key_1_last_used_service": "s3",
+                "access_key_2_active": "true",
+                "access_key_2_last_rotated": "2023-09-01T11:00:00+00:00",
+                "access_key_2_last_used_date": "2024-01-13T12:00:00+00:00",
+                "access_key_2_last_used_region": "us-east-1",
+                "access_key_2_last_used_service": "rds",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "service-user",
+                "arn": "arn:aws:iam::123456789012:user/service-user",
+                "user_creation_time": "2023-05-10T16:20:00+00:00",
+                "password_enabled": "false",
+                "password_last_used": "N/A",
+                "password_last_changed": "N/A",
+                "password_next_rotation": "N/A",
+                "mfa_active": "false",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2023-05-10T16:25:00+00:00",
+                "access_key_1_last_used_date": "2024-01-15T00:15:00+00:00",
+                "access_key_1_last_used_region": "us-east-1",
+                "access_key_1_last_used_service": "lambda",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "inactive-user",
+                "arn": "arn:aws:iam::123456789012:user/inactive-user",
+                "user_creation_time": "2022-03-25T10:00:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2023-08-15T14:30:00+00:00",
+                "password_last_changed": "2022-03-25T10:00:00+00:00",
+                "password_next_rotation": "2022-06-25T10:00:00+00:00",
+                "mfa_active": "false",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2022-04-01T09:00:00+00:00",
+                "access_key_1_last_used_date": "2023-08-20T11:00:00+00:00",
+                "access_key_1_last_used_region": "us-east-1",
+                "access_key_1_last_used_service": "ec2",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "compliance-user",
+                "arn": "arn:aws:iam::123456789012:user/compliance-user",
+                "user_creation_time": "2023-11-01T13:45:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2024-01-15T08:00:00+00:00",
+                "password_last_changed": "2023-11-01T13:45:00+00:00",
+                "password_next_rotation": "2024-02-01T13:45:00+00:00",
+                "mfa_active": "true",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2023-11-01T14:00:00+00:00",
+                "access_key_1_last_used_date": "2024-01-14T22:30:00+00:00",
+                "access_key_1_last_used_region": "eu-west-1",
+                "access_key_1_last_used_service": "securityhub",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "new-user",
+                "arn": "arn:aws:iam::123456789012:user/new-user",
+                "user_creation_time": "2024-01-15T12:00:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2024-01-15T12:30:00+00:00",
+                "password_last_changed": "2024-01-15T12:00:00+00:00",
+                "password_next_rotation": "2024-04-15T12:00:00+00:00",
+                "mfa_active": "false",
+                "access_key_1_active": "false",
+                "access_key_1_last_rotated": "N/A",
+                "access_key_1_last_used_date": "N/A",
+                "access_key_1_last_used_region": "N/A",
+                "access_key_1_last_used_service": "N/A",
+                "access_key_2_active": "false",
+                "access_key_2_last_rotated": "N/A",
+                "access_key_2_last_used_date": "N/A",
+                "access_key_2_last_used_region": "N/A",
+                "access_key_2_last_used_service": "N/A",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            },
+            {
+                "user": "legacy-user",
+                "arn": "arn:aws:iam::123456789012:user/legacy-user",
+                "user_creation_time": "2021-07-10T09:00:00+00:00",
+                "password_enabled": "true",
+                "password_last_used": "2022-12-20T16:00:00+00:00",
+                "password_last_changed": "2021-07-10T09:00:00+00:00",
+                "password_next_rotation": "2021-10-10T09:00:00+00:00",
+                "mfa_active": "false",
+                "access_key_1_active": "true",
+                "access_key_1_last_rotated": "2021-08-15T10:00:00+00:00",
+                "access_key_1_last_used_date": "2022-11-30T14:00:00+00:00",
+                "access_key_1_last_used_region": "us-east-1",
+                "access_key_1_last_used_service": "s3",
+                "access_key_2_active": "true",
+                "access_key_2_last_rotated": "2021-08-15T10:00:00+00:00",
+                "access_key_2_last_used_date": "2022-10-25T09:00:00+00:00",
+                "access_key_2_last_used_region": "us-east-1",
+                "access_key_2_last_used_service": "ec2",
+                "cert_1_active": "false",
+                "cert_1_last_rotated": "N/A",
+                "cert_2_active": "false",
+                "cert_2_last_rotated": "N/A"
+            }
+        ],
+        "summary": {
+            "total_users": 8,
+            "users_with_mfa": 4,
+            "users_without_mfa": 4,
+            "users_with_password": 6,
+            "users_without_password": 1,
+            "users_with_access_keys": 6,
+            "users_without_access_keys": 2,
+            "users_with_active_keys": 6,
+            "users_with_inactive_keys": 0,
+            "users_with_rotated_keys": 2,
+            "users_with_stale_keys": 4,
+            "users_with_certificates": 0
+        },
+        "compliance_issues": [
+            {
+                "user": "inactive-user",
+                "issue": "MFA not enabled",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.4.2",
+                    "CIS-1.10",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "service-user",
+                "issue": "MFA not enabled",
+                "severity": "MEDIUM",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.4.2",
+                    "CIS-1.10",
+                    "SOC2-CC6.1"
+                ],
+                "note": "API-only user, MFA not applicable"
+            },
+            {
+                "user": "new-user",
+                "issue": "MFA not enabled",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.4.2",
+                    "CIS-1.10",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "legacy-user",
+                "issue": "MFA not enabled",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.4.2",
+                    "CIS-1.10",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "inactive-user",
+                "issue": "Password not used in >90 days",
+                "severity": "MEDIUM",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.6",
+                    "CIS-1.15"
+                ]
+            },
+            {
+                "user": "legacy-user",
+                "issue": "Password not used in >90 days",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.6",
+                    "CIS-1.15"
+                ]
+            },
+            {
+                "user": "dev-user",
+                "issue": "Access key not rotated in >90 days",
+                "severity": "MEDIUM",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.4",
+                    "CIS-1.14",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "inactive-user",
+                "issue": "Access key not rotated in >90 days",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.4",
+                    "CIS-1.14",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "legacy-user",
+                "issue": "Access key not rotated in >90 days",
+                "severity": "CRITICAL",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.4",
+                    "CIS-1.14",
+                    "SOC2-CC6.1"
+                ]
+            },
+            {
+                "user": "legacy-user",
+                "issue": "User inactive for >90 days",
+                "severity": "HIGH",
+                "compliance_frameworks": [
+                    "PCI-DSS-8.2.6",
+                    "CIS-1.15"
+                ]
+            }
+        ]
+    }
+}

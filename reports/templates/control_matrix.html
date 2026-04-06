@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Matrix - GRC Evidence Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header Styles */
+        .header {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .header .meta-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 12px;
+        }
+
+        .header .meta-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 4px;
+        }
+
+        /* Filter Section */
+        .filter-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a365d;
+            margin-bottom: 15px;
+        }
+
+        .filter-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .filter-group select,
+        .filter-group input {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 13px;
+            background: white;
+            min-width: 150px;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #3182ce;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2c5282;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        /* Table Section */
+        .table-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            overflow-x: auto;
+        }
+
+        .table-section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a365d;
+            margin-bottom: 15px;
+        }
+
+        .control-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .control-table thead {
+            background: #1a365d;
+            color: white;
+        }
+
+        .control-table th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .control-table th:hover {
+            background: #2c5282;
+        }
+
+        .control-table th .sort-icon {
+            margin-left: 5px;
+            opacity: 0.5;
+        }
+
+        .control-table th.sorted .sort-icon {
+            opacity: 1;
+        }
+
+        .control-table tbody tr {
+            border-bottom: 1px solid #e2e8f0;
+            transition: background 0.2s ease;
+        }
+
+        .control-table tbody tr:hover {
+            background: #f7fafc;
+        }
+
+        .control-table td {
+            padding: 10px 8px;
+            vertical-align: middle;
+        }
+
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.pass {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .status-badge.fail {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .status-badge.warning {
+            background: #fefcbf;
+            color: #d69e2e;
+        }
+
+        .status-badge.not_applicable {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        /* Priority Badges */
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .priority-badge.critical {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .priority-badge.high {
+            background: #feebc8;
+            color: #dd6b20;
+        }
+
+        .priority-badge.medium {
+            background: #fefcbf;
+            color: #d69e2e;
+        }
+
+        .priority-badge.low {
+            background: #c6f6d5;
+            color: #38a169;
+        }
+
+        /* Evidence Link */
+        .evidence-link {
+            color: #3182ce;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .evidence-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Auto-Remediated Badge */
+        .auto-remediated {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .auto-remediated.yes {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+
+        .auto-remediated.no {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        /* Summary Statistics */
+        .summary-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .summary-section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a365d;
+            margin-bottom: 15px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .summary-card {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .summary-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a365d;
+            margin-bottom: 5px;
+        }
+
+        .summary-value.pass {
+            color: #38a169;
+        }
+
+        .summary-value.fail {
+            color: #c53030;
+        }
+
+        .summary-value.warning {
+            color: #d69e2e;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Pagination */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f7fafc;
+            border-color: #3182ce;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-info {
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+            font-size: 11px;
+            margin-top: 30px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .control-table {
+                font-size: 11px;
+            }
+
+            .control-table th,
+            .control-table td {
+                padding: 8px 6px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .filter-controls {
+                flex-direction: column;
+            }
+
+            .filter-group select,
+            .filter-group input {
+                width: 100%;
+            }
+
+            .filter-buttons {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .control-table {
+                font-size: 10px;
+            }
+
+            .control-table th,
+            .control-table td {
+                padding: 6px 4px;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+
+            .filter-section,
+            .pagination {
+                display: none;
+            }
+
+            .table-section,
+            .summary-section {
+                box-shadow: none;
+                page-break-inside: avoid;
+            }
+
+            .control-table {
+                page-break-inside: auto;
+            }
+
+            .control-table tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+            }
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3182ce;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #4a5568;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Control Matrix</h1>
+            <p class="subtitle">Control-by-Control Evidence Matrix</p>
+            <div class="meta-info">
+                <div class="meta-item">
+                    <strong>Account ID:</strong> {{ scorecard.aws_account_id }}
+                </div>
+                <div class="meta-item">
+                    <strong>Region:</strong> {{ scorecard.aws_region }}
+                </div>
+                <div class="meta-item">
+                    <strong>Period:</strong> {{ scorecard.period_start }} to {{ scorecard.period_end }}
+                </div>
+                <div class="meta-item">
+                    <strong>Generated:</strong> {{ scorecard.generated_at }}
+                </div>
+            </div>
+        </header>
+
+        <!-- Filter Section -->
+        <section class="filter-section">
+            <h2>Filter Controls</h2>
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label for="framework-filter">Framework</label>
+                    <select id="framework-filter" onchange="filterTable()">
+                        <option value="">All Frameworks</option>
+                        {% for framework in frameworks %}
+                        <option value="{{ framework }}">{{ framework }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter" onchange="filterTable()">
+                        <option value="">All Statuses</option>
+                        <option value="PASS">PASS</option>
+                        <option value="FAIL">FAIL</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="NOT_APPLICABLE">NOT_APPLICABLE</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="priority-filter">Priority</label>
+                    <select id="priority-filter" onchange="filterTable()">
+                        <option value="">All Priorities</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                        <option value="HIGH">HIGH</option>
+                        <option value="MEDIUM">MEDIUM</option>
+                        <option value="LOW">LOW</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="search-filter">Search</label>
+                    <input type="text" id="search-filter" placeholder="Control ID, description, or resource..."
+                        onkeyup="filterTable()">
+                </div>
+                <div class="filter-buttons">
+                    <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
+                    <button class="btn btn-secondary" onclick="resetFilters()">Reset</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Summary Statistics -->
+        <section class="summary-section">
+            <h2>Summary Statistics</h2>
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <div class="summary-value">{{ evidence_records | length }}</div>
+                    <div class="summary-label">Total Controls</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value pass">{{ evidence_records | selectattr('status', 'equalto', 'PASS') | list
+                        | length }}</div>
+                    <div class="summary-label">Passing</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value fail">{{ evidence_records | selectattr('status', 'equalto', 'FAIL') | list
+                        | length }}</div>
+                    <div class="summary-label">Failing</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value warning">{{ evidence_records | selectattr('status', 'equalto', 'WARNING')
+                        | list | length }}</div>
+                    <div class="summary-label">Warnings</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value">{{ evidence_records | selectattr('auto_remediated', 'equalto', true) |
+                        list | length }}</div>
+                    <div class="summary-label">Auto-Remediated</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Control Matrix Table -->
+        <section class="table-section">
+            <h2>Control Matrix</h2>
+            <div id="table-container">
+                <table class="control-table" id="control-table">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">Control ID <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(1)">Framework <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(2)">Control Description <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(3)">Collector <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(4)">Evidence Type <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(5)">Status <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(6)">Priority <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(7)">Resource ID <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(8)">Last Evidence Date <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(9)">Auto-Remediated <span class="sort-icon">⇅</span></th>
+                            <th onclick="sortTable(10)">Evidence Link <span class="sort-icon">⇅</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        {% for record in evidence_records %}
+                        <tr data-framework="{{ record.framework | default('') }}"
+                            data-status="{{ record.status | default('') }}"
+                            data-priority="{{ record.priority | default('') }}"
+                            data-search="{{ record.control_id | default('') }} {{ record.control_description | default('') }} {{ record.resource_id | default('') }}">
+                            <td><strong>{{ record.control_id | default('N/A') }}</strong></td>
+                            <td>{{ record.framework | default('N/A') }}</td>
+                            <td>{{ record.control_description | default('N/A') }}</td>
+                            <td>{{ record.collector_name | default('N/A') }}</td>
+                            <td>{{ record.evidence_type | default('N/A') }}</td>
+                            <td>
+                                <span class="status-badge {{ record.status | lower | replace('_', '_') }}">
+                                    {{ record.status | default('N/A') }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="priority-badge {{ record.priority | lower }}">
+                                    {{ record.priority | default('N/A') }}
+                                </span>
+                            </td>
+                            <td>{{ record.resource_id | default('N/A') }}</td>
+                            <td>{{ record.evidence_timestamp | default('N/A') }}</td>
+                            <td>
+                                <span class="auto-remediated {% if record.auto_remediated %}yes{% else %}no{% endif %}">
+                                    {% if record.auto_remediated %}Yes{% else %}No{% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                {% if record.evidence_link %}
+                                <a href="{{ record.evidence_link }}" class="evidence-link" target="_blank">View</a>
+                                {% else %}
+                                <span style="color: #a0aec0;">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination">
+                <button onclick="changePage(-1)" id="prev-btn">Previous</button>
+                <span class="page-info" id="page-info">Page 1 of 1</span>
+                <button onclick="changePage(1)" id="next-btn">Next</button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>This report is confidential and intended solely for authorized personnel.</p>
+            <p>Generated by GRC Evidence Platform v2.0 | {{ scorecard.generated_at }}</p>
+        </footer>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPage = 1;
+        const rowsPerPage = 25;
+        let sortDirection = 1;
+        let currentSortColumn = -1;
+        let allRows = [];
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            allRows = Array.from(document.querySelectorAll('#table-body tr'));
+            updatePagination();
+        });
+
+        // Filter table based on selected criteria
+        function filterTable() {
+            const frameworkFilter = document.getElementById('framework-filter').value.toLowerCase();
+            const statusFilter = document.getElementById('status-filter').value.toLowerCase();
+            const priorityFilter = document.getElementById('priority-filter').value.toLowerCase();
+            const searchFilter = document.getElementById('search-filter').value.toLowerCase();
+
+            const rows = document.querySelectorAll('#table-body tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const framework = row.getAttribute('data-framework').toLowerCase();
+                const status = row.getAttribute('data-status').toLowerCase();
+                const priority = row.getAttribute('data-priority').toLowerCase();
+                const searchText = row.getAttribute('data-search').toLowerCase();
+
+                const matchesFramework = !frameworkFilter || framework.includes(frameworkFilter);
+                const matchesStatus = !statusFilter || status === statusFilter;
+                const matchesPriority = !priorityFilter || priority === priorityFilter;
+                const matchesSearch = !searchFilter || searchText.includes(searchFilter);
+
+                if (matchesFramework && matchesStatus && matchesPriority && matchesSearch) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Reset to first page and update pagination
+            currentPage = 1;
+            allRows = Array.from(rows).filter(row => row.style.display !== 'none');
+            updatePagination();
+        }
+
+        // Apply filters (alias for filterTable)
+        function applyFilters() {
+            filterTable();
+        }
+
+        // Reset all filters
+        function resetFilters() {
+            document.getElementById('framework-filter').value = '';
+            document.getElementById('status-filter').value = '';
+            document.getElementById('priority-filter').value = '';
+            document.getElementById('search-filter').value = '';
+            filterTable();
+        }
+
+        // Sort table by column
+        function sortTable(columnIndex) {
+            const table = document.getElementById('control-table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Toggle sort direction
+            if (currentSortColumn === columnIndex) {
+                sortDirection *= -1;
+            } else {
+                currentSortColumn = columnIndex;
+                sortDirection = 1;
+            }
+
+            // Update sort indicators
+            document.querySelectorAll('th').forEach((th, index) => {
+                th.classList.remove('sorted');
+                if (index === columnIndex) {
+                    th.classList.add('sorted');
+                }
+            });
+
+            // Sort rows
+            rows.sort((a, b) => {
+                const aValue = a.cells[columnIndex].textContent.trim();
+                const bValue = b.cells[columnIndex].textContent.trim();
+
+                let comparison = 0;
+                if (aValue < bValue) {
+                    comparison = -1;
+                } else if (aValue > bValue) {
+                    comparison = 1;
+                }
+
+                return comparison * sortDirection;
+            });
+
+            // Reappend sorted rows
+            rows.forEach(row => tbody.appendChild(row));
+
+            // Update visible rows for pagination
+            allRows = Array.from(tbody.querySelectorAll('tr')).filter(row => row.style.display !== 'none');
+            currentPage = 1;
+            updatePagination();
+        }
+
+        // Update pagination display
+        function updatePagination() {
+            const totalPages = Math.ceil(allRows.length / rowsPerPage);
+
+            // Show/hide rows based on current page
+            allRows.forEach((row, index) => {
+                if (index >= (currentPage - 1) * rowsPerPage && index < currentPage * rowsPerPage) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update page info
+            document.getElementById('page-info').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+
+            // Update button states
+            document.getElementById('prev-btn').disabled = currentPage <= 1;
+            document.getElementById('next-btn').disabled = currentPage >= totalPages || totalPages === 0;
+        }
+
+        // Change page
+        function changePage(delta) {
+            const totalPages = Math.ceil(allRows.length / rowsPerPage);
+            const newPage = currentPage + delta;
+
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                updatePagination();
+            }
+        }
+
+        // Export table to CSV
+        function exportToCSV() {
+            const table = document.getElementById('control-table');
+            const rows = table.querySelectorAll('tr');
+            const csv = [];
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('th, td');
+                const rowData = [];
+                cells.forEach(cell => {
+                    rowData.push('"' + cell.textContent.trim().replace(/"/g, '""') + '"');
+                });
+                csv.push(rowData.join(','));
+            });
+
+            const csvContent = csv.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'control_matrix_' + new Date().toISOString().split('T')[0] + '.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Print report
+        function printReport() {
+            window.print();
+        }
+    </script>
+</body>
+
+</html>

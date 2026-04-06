@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRC Compliance Executive Summary</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header Styles */
+        .header {
+            background: linear-gradient(135deg, #1a365d 0%, #2c5282 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .header .meta-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 13px;
+        }
+
+        .header .meta-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 15px;
+            border-radius: 4px;
+        }
+
+        .header .classification {
+            background: #c53030;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        /* Executive Summary Section */
+        .section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a365d;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .risk-score-container {
+            text-align: center;
+            padding: 30px;
+            background: #f7fafc;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .risk-score {
+            font-size: 64px;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+
+        .risk-score.critical {
+            color: #c53030;
+        }
+
+        .risk-score.high {
+            color: #dd6b20;
+        }
+
+        .risk-score.medium {
+            color: #d69e2e;
+        }
+
+        .risk-score.low {
+            color: #38a169;
+        }
+
+        .risk-score.compliant {
+            color: #2f855a;
+        }
+
+        .risk-rating {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .risk-rating.critical {
+            background: #fed7d7;
+            color: #c53030;
+        }
+
+        .risk-rating.high {
+            background: #feebc8;
+            color: #dd6b20;
+        }
+
+        .risk-rating.medium {
+            background: #fefcbf;
+            color: #d69e2e;
+        }
+
+        .risk-rating.low {
+            background: #c6f6d5;
+            color: #38a169;
+        }
+
+        .risk-rating.compliant {
+            background: #9ae6b4;
+            color: #2f855a;
+        }
+
+        .trend-indicator {
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .trend-indicator .trend-up {
+            color: #38a169;
+        }
+
+        .trend-indicator .trend-down {
+            color: #c53030;
+        }
+
+        /* Top Risks */
+        .top-risks {
+            margin-top: 20px;
+        }
+
+        .top-risks h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .risk-list {
+            list-style: none;
+        }
+
+        .risk-list li {
+            padding: 10px 15px;
+            background: #fff5f5;
+            border-left: 4px solid #c53030;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        /* Framework Scores */
+        .framework-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .framework-card {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .framework-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .framework-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a365d;
+        }
+
+        .framework-version {
+            font-size: 12px;
+            color: #718096;
+            background: #e2e8f0;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .framework-score {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .framework-score.pass {
+            color: #38a169;
+        }
+
+        .framework-score.fail {
+            color: #c53030;
+        }
+
+        .framework-score.warning {
+            color: #d69e2e;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.pass {
+            background: #38a169;
+        }
+
+        .progress-fill.fail {
+            background: #c53030;
+        }
+
+        .progress-fill.warning {
+            background: #d69e2e;
+        }
+
+        .framework-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        .framework-trend {
+            margin-top: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .framework-trend.trend-up {
+            color: #38a169;
+        }
+
+        .framework-trend.trend-down {
+            color: #c53030;
+        }
+
+        /* Key Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .metric-card {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1a365d;
+            margin-bottom: 5px;
+        }
+
+        .metric-value.critical {
+            color: #c53030;
+        }
+
+        .metric-value.high {
+            color: #dd6b20;
+        }
+
+        .metric-value.medium {
+            color: #d69e2e;
+        }
+
+        .metric-value.low {
+            color: #38a169;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Recommendations */
+        .recommendations {
+            margin-top: 20px;
+        }
+
+        .recommendation-item {
+            padding: 15px;
+            background: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .recommendation-item h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c5282;
+            margin-bottom: 5px;
+        }
+
+        .recommendation-item p {
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #718096;
+            font-size: 12px;
+            margin-top: 30px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .header .meta-info {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .header .classification {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+
+            .risk-score {
+                font-size: 48px;
+            }
+
+            .framework-grid,
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+
+            .section {
+                box-shadow: none;
+                page-break-inside: avoid;
+            }
+
+            .header {
+                page-break-after: avoid;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>GRC Compliance Executive Summary</h1>
+            <p class="subtitle">Evidence Platform v2.0 - Audit Report</p>
+            <div class="meta-info">
+                <div class="meta-item">
+                    <strong>Account ID:</strong> {{ scorecard.aws_account_id }}
+                </div>
+                <div class="meta-item">
+                    <strong>Region:</strong> {{ scorecard.aws_region }}
+                </div>
+                <div class="meta-item">
+                    <strong>Period:</strong> {{ scorecard.period_start }} to {{ scorecard.period_end }}
+                </div>
+                <div class="meta-item">
+                    <strong>Generated:</strong> {{ scorecard.generated_at }}
+                </div>
+                <div class="classification">CONFIDENTIAL</div>
+            </div>
+        </header>
+
+        <!-- Executive Summary -->
+        <section class="section">
+            <h2 class="section-title">Executive Summary</h2>
+
+            <div class="risk-score-container">
+                <div class="risk-score {{ scorecard.overall_risk_rating.lower() }}">
+                    {{ "%.1f"|format(scorecard.overall_risk_score) }}
+                </div>
+                <div class="risk-rating {{ scorecard.overall_risk_rating.lower() }}">
+                    {{ scorecard.overall_risk_rating }}
+                </div>
+                <div class="trend-indicator">
+                    {% if scorecard.frameworks %}
+                    {% set avg_trend = scorecard.frameworks.values() | map(attribute='trend_vs_yesterday') | list | sum
+                    / scorecard.frameworks | length %}
+                    {% if avg_trend > 0 %}
+                    <span class="trend-up">▲ {{ "%.1f"|format(avg_trend) }}% vs yesterday</span>
+                    {% elif avg_trend < 0 %} <span class="trend-down">▼ {{ "%.1f"|format(avg_trend) }}% vs
+                        yesterday</span>
+                        {% else %}
+                        <span>→ No change vs yesterday</span>
+                        {% endif %}
+                        {% else %}
+                        <span>No trend data available</span>
+                        {% endif %}
+                </div>
+            </div>
+
+            {% if scorecard.top_5_risks %}
+            <div class="top-risks">
+                <h3>Top 5 Priority Risks</h3>
+                <ul class="risk-list">
+                    {% for risk in scorecard.top_5_risks %}
+                    <li>{{ risk }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Framework Scores -->
+        <section class="section">
+            <h2 class="section-title">Framework Scores</h2>
+            <div class="framework-grid">
+                {% for framework_name, framework in scorecard.frameworks.items() %}
+                <div class="framework-card">
+                    <div class="framework-header">
+                        <div class="framework-name">{{ framework_name }}</div>
+                        <div class="framework-version">{{ framework.version }}</div>
+                    </div>
+                    <div
+                        class="framework-score {% if framework.score_percentage >= 80 %}pass{% elif framework.score_percentage >= 60 %}warning{% else %}fail{% endif %}">
+                        {{ "%.1f"|format(framework.score_percentage) }}%
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill {% if framework.score_percentage >= 80 %}pass{% elif framework.score_percentage >= 60 %}warning{% else %}fail{% endif %}"
+                            style="width: {{ framework.score_percentage }}%"></div>
+                    </div>
+                    <div class="framework-stats">
+                        <span>Passing: {{ framework.controls_passing }}</span>
+                        <span>Failing: {{ framework.controls_failing }}</span>
+                        <span>Not Tested: {{ framework.controls_not_tested }}</span>
+                    </div>
+                    <div
+                        class="framework-trend {% if framework.trend_vs_yesterday >= 0 %}trend-up{% else %}trend-down{% endif %}">
+                        {% if framework.trend_vs_yesterday > 0 %}
+                        ▲ {{ "%.1f"|format(framework.trend_vs_yesterday) }}% vs yesterday
+                        {% elif framework.trend_vs_yesterday < 0 %} ▼ {{ "%.1f" |format(framework.trend_vs_yesterday)
+                            }}% vs yesterday {% else %} → No change {% endif %} </div>
+                    </div>
+                    {% endfor %}
+                </div>
+        </section>
+
+        <!-- Key Metrics -->
+        <section class="section">
+            <h2 class="section-title">Key Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value">{{ scorecard.total_evidence_collected }}</div>
+                    <div class="metric-label">Total Evidence</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">{{ scorecard.total_findings }}</div>
+                    <div class="metric-label">Total Findings</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value critical">{{ scorecard.critical_findings }}</div>
+                    <div class="metric-label">Critical</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value high">{{ scorecard.high_findings }}</div>
+                    <div class="metric-label">High</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value medium">{{ scorecard.medium_findings }}</div>
+                    <div class="metric-label">Medium</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value low">{{ scorecard.low_findings }}</div>
+                    <div class="metric-label">Low</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">{{ scorecard.auto_remediated_today }}</div>
+                    <div class="metric-label">Auto-Remediated</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recommendations -->
+        <section class="section">
+            <h2 class="section-title">Recommendations</h2>
+            <div class="recommendations">
+                {% if scorecard.critical_findings > 0 %}
+                <div class="recommendation-item">
+                    <h4>Address Critical Findings Immediately</h4>
+                    <p>There are {{ scorecard.critical_findings }} critical findings that require immediate attention.
+                        Prioritize remediation of these issues to reduce compliance risk.</p>
+                </div>
+                {% endif %}
+
+                {% if scorecard.high_findings > 0 %}
+                <div class="recommendation-item">
+                    <h4>Review High Severity Findings</h4>
+                    <p>{{ scorecard.high_findings }} high severity findings should be reviewed and addressed within the
+                        next 7 days to maintain compliance posture.</p>
+                </div>
+                {% endif %}
+
+                {% if scorecard.auto_remediated_today > 0 %}
+                <div class="recommendation-item">
+                    <h4>Verify Auto-Remediation Results</h4>
+                    <p>{{ scorecard.auto_remediated_today }} issues were automatically remediated today. Verify these
+                        changes and confirm compliance status.</p>
+                </div>
+                {% endif %}
+
+                {% for framework_name, framework in scorecard.frameworks.items() %}
+                {% if framework.score_percentage < 80 %} <div class="recommendation-item">
+                    <h4>Improve {{ framework_name }} Compliance</h4>
+                    <p>{{ framework_name }} compliance is at {{ "%.1f"|format(framework.score_percentage) }}%. Focus on
+                        the {{ framework.controls_failing }} failing controls to improve overall score.</p>
+            </div>
+            {% endif %}
+            {% endfor %}
+
+            {% if scorecard.critical_findings == 0 and scorecard.high_findings == 0 %}
+            <div class="recommendation-item">
+                <h4>Maintain Compliance Posture</h4>
+                <p>Excellent work! No critical or high findings detected. Continue regular monitoring and maintain
+                    current security practices.</p>
+            </div>
+            {% endif %}
+    </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>This report is confidential and intended solely for authorized personnel.</p>
+        <p>Generated by GRC Evidence Platform v2.0 | {{ scorecard.generated_at }}</p>
+    </footer>
+    </div>
+</body>
+
+</html>

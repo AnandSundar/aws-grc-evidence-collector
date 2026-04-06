@@ -1,0 +1,261 @@
+name: Compliance Scan
+
+# Trigger on pull requests to main and staging branches, and pushes to main
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+  push:
+    branches:
+      - main
+
+jobs:
+  # Job 1: CloudFormation Lint
+  cfn-lint:
+    name: CloudFormation Lint
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Install cfn-lint
+      - name: Install cfn-lint
+        run: pip install cfn-lint
+      
+      # Step 3: Lint CloudFormation templates
+      - name: Lint CloudFormation templates
+        run: |
+          cfn-lint cloudformation/*.yaml --format json --output-file cfn-lint-results.json
+        continue-on-error: false
+      
+      # Step 4: Upload lint results as artifact
+      - name: Upload cfn-lint results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-lint-results
+          path: cfn-lint-results.json
+          retention-days: 30
+
+  # Job 2: Checkov Security Scan
+  checkov-scan:
+    name: Checkov Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Install Checkov
+      - name: Install Checkov
+        run: pip install checkov
+      
+      # Step 3: Scan CloudFormation templates
+      - name: Scan CloudFormation templates
+        run: |
+          mkdir -p results
+          checkov -d cloudformation/ \
+            --framework cloudformation \
+            --output json \
+            --output-file-path results/ \
+            --soft-fail-on MEDIUM,LOW
+        continue-on-error: true
+      
+      # Step 4: Scan Python code
+      - name: Scan Python code
+        run: |
+          mkdir -p results/python
+          checkov -d lambda/ collectors/ remediations/ \
+            --framework python_code \
+            --output json \
+            --output-file-path results/python/
+        continue-on-error: true
+      
+      # Step 5: Upload Checkov results as artifact
+      - name: Upload Checkov results
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-results
+          path: results/
+          retention-days: 30
+
+  # Job 3: Compliance Gate Check
+  compliance-gate:
+    name: Compliance Gate Check
+    runs-on: ubuntu-latest
+    needs: [cfn-lint, checkov-scan]
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Download Checkov results
+      - name: Download Checkov results
+        uses: actions/download-artifact@v4
+        with:
+          name: checkov-results
+          path: results/
+      
+      # Step 3: Run compliance gate check
+      - name: Run compliance gate check
+        run: |
+          python scripts/gate_check.py results/
+        continue-on-error: false
+      
+      # Step 4: Comment PR with results (only on pull requests)
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the gate summary
+            const gateSummaryPath = path.join(process.env.GITHUB_WORKSPACE, 'gate_summary.json');
+            let gateSummary;
+            try {
+              const gateSummaryContent = fs.readFileSync(gateSummaryPath, 'utf8');
+              gateSummary = JSON.parse(gateSummaryContent);
+            } catch (error) {
+              console.log('Could not read gate_summary.json:', error.message);
+              return;
+            }
+            
+            // Create markdown table for results
+            let commentBody = '## 🔍 Compliance Scan Results\n\n';
+            
+            // Add overall status
+            const statusEmoji = gateSummary.passed ? '✅' : '❌';
+            commentBody += `**Overall Status:** ${statusEmoji} ${gateSummary.passed ? 'PASSED' : 'FAILED'}\n\n`;
+            
+            // Add summary metrics
+            if (gateSummary.summary) {
+              commentBody += '### Summary Metrics\n\n';
+              commentBody += '| Metric | Value |\n';
+              commentBody += '|--------|-------|\n';
+              commentBody += `| Total Checks | ${gateSummary.summary.total_checks || 'N/A'} |\n`;
+              commentBody += `| Passed | ${gateSummary.summary.passed || 'N/A'} |\n`;
+              commentBody += `| Failed | ${gateSummary.summary.failed || 'N/A'} |\n`;
+              commentBody += `| Skipped | ${gateSummary.summary.skipped || 'N/A'} |\n`;
+              commentBody += `| Pass Rate | ${gateSummary.summary.pass_rate || 'N/A'} |\n\n`;
+            }
+            
+            // Add Checkov results if available
+            if (gateSummary.checkov_results) {
+              commentBody += '### Checkov Security Scan\n\n';
+              commentBody += '| Severity | Passed | Failed |\n';
+              commentBody += '|----------|--------|--------|\n';
+              const checkov = gateSummary.checkov_results;
+              if (checkov.critical) {
+                commentBody += `| CRITICAL | ${checkov.critical.passed || 0} | ${checkov.critical.failed || 0} |\n`;
+              }
+              if (checkov.high) {
+                commentBody += `| HIGH | ${checkov.high.passed || 0} | ${checkov.high.failed || 0} |\n`;
+              }
+              if (checkov.medium) {
+                commentBody += `| MEDIUM | ${checkov.medium.passed || 0} | ${checkov.medium.failed || 0} |\n`;
+              }
+              if (checkov.low) {
+                commentBody += `| LOW | ${checkov.low.passed || 0} | ${checkov.low.failed || 0} |\n`;
+              }
+              commentBody += '\n';
+            }
+            
+            // Add cfn-lint results if available
+            if (gateSummary.cfn_lint_results) {
+              commentBody += '### CloudFormation Lint\n\n';
+              const cfnLint = gateSummary.cfn_lint_results;
+              if (cfnLint.errors && cfnLint.errors > 0) {
+                commentBody += `❌ **${cfnLint.errors} Errors** found\n\n`;
+              } else {
+                commentBody += '✅ No CloudFormation linting errors\n\n';
+              }
+              if (cfnLint.warnings && cfnLint.warnings > 0) {
+                commentBody += `⚠️ **${cfnLint.warnings} Warnings** found\n\n`;
+              }
+            }
+            
+            // Add recommendations if available
+            if (gateSummary.recommendations && gateSummary.recommendations.length > 0) {
+              commentBody += '### 📋 Recommendations\n\n';
+              gateSummary.recommendations.forEach((rec, index) => {
+                commentBody += `${index + 1}. ${rec}\n`;
+              });
+              commentBody += '\n';
+            }
+            
+            // Add footer with workflow link
+            const workflowUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            commentBody += `\n---\n*View full details: [Workflow Run #${process.env.GITHUB_RUN_ID}](${workflowUrl})*`;
+            
+            // Create or update comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Compliance Scan Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+  # Job 4: Python Unit Tests
+  python-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov moto[all]
+      
+      # Step 4: Run tests with coverage
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ -v --cov=collectors --cov=remediations --cov-report=xml
+        continue-on-error: false
+      
+      # Step 5: Fail if coverage < 80%
+      - name: Check coverage threshold
+        run: |
+          python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); cov = float(root.attrib['line-rate'])*100; print(f'Coverage: {cov:.1f}%'); exit(0 if cov >= 80 else 1)"
+        continue-on-error: false
+      
+      # Step 6: Upload coverage report as artifact
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 30

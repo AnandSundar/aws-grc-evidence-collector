@@ -1,5 +1,0 @@
-{
-  "name": "AWS GRC Evidence Collector",
-  "description": "An AI-powered GRC (Governance, Risk & Compliance) Evidence Collector on AWS. Features automated evidence collection, risk classification, and AI-driven analysis using AWS Bedrock.",
-  "requestFramePermissions": []
-}

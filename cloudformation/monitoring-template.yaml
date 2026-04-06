@@ -1,0 +1,681 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  GRC Evidence Platform v2.0 - Monitoring Template
+  
+  This template creates CloudWatch alarms and dashboards for monitoring
+  the GRC Evidence Platform. This template is designed to be deployed
+  separately for modularity.
+  
+  Author: GRC Platform Team
+  Version: 2.0
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment Configuration
+        Parameters:
+          - Environment
+      - Label:
+          default: Lambda Function References
+        Parameters:
+          - EvidenceProcessorFunctionName
+          - RemediationEngineFunctionName
+          - ScorecardGeneratorFunctionName
+          - AgingMonitorFunctionName
+          - ReportExporterFunctionName
+      - Label:
+          default: DynamoDB Table References
+        Parameters:
+          - MetadataTableName
+          - RemediationLogTableName
+          - ScorecardTableName
+      - Label:
+          default: Alert Configuration
+        Parameters:
+          - AlertEmail
+    ParameterLabels:
+      Environment:
+        default: Deployment Environment
+      EvidenceProcessorFunctionName:
+        default: Evidence Processor Function Name
+      RemediationEngineFunctionName:
+        default: Remediation Engine Function Name
+      ScorecardGeneratorFunctionName:
+        default: Scorecard Generator Function Name
+      AgingMonitorFunctionName:
+        default: Aging Monitor Function Name
+      ReportExporterFunctionName:
+        default: Report Exporter Function Name
+      MetadataTableName:
+        default: Metadata Table Name
+      RemediationLogTableName:
+        default: Remediation Log Table Name
+      ScorecardTableName:
+        default: Scorecard Table Name
+      AlertEmail:
+        default: Alert Email Address
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Deployment environment (dev, staging, or prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Default: dev
+    
+  EvidenceProcessorFunctionName:
+    Type: String
+    Description: Name of the Evidence Processor Lambda function
+    
+  RemediationEngineFunctionName:
+    Type: String
+    Description: Name of the Remediation Engine Lambda function
+    
+  ScorecardGeneratorFunctionName:
+    Type: String
+    Description: Name of the Scorecard Generator Lambda function
+    
+  AgingMonitorFunctionName:
+    Type: String
+    Description: Name of the Aging Monitor Lambda function
+    
+  ReportExporterFunctionName:
+    Type: String
+    Description: Name of the Report Exporter Lambda function
+    
+  MetadataTableName:
+    Type: String
+    Description: Name of the Metadata DynamoDB table
+    
+  RemediationLogTableName:
+    Type: String
+    Description: Name of the Remediation Log DynamoDB table
+    
+  ScorecardTableName:
+    Type: String
+    Description: Name of the Scorecard DynamoDB table
+    
+  AlertEmail:
+    Type: String
+    Description: Email address for alarm notifications (leave empty to disable)
+    Default: ""
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, ""]]
+  IsProduction: !Equals [!Ref Environment, "prod"]
+
+Resources:
+  # ============================================================================
+  # SNS TOPIC FOR ALERTS
+  # ============================================================================
+
+  MonitoringAlertTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlertEmail
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-monitoring-alerts-${Environment}"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-monitoring-alerts"
+        - Key: Environment
+          Value: !Ref Environment
+
+  MonitoringAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      Protocol: email
+      TopicArn: !Ref MonitoringAlertTopic
+      Endpoint: !Ref AlertEmail
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - LAMBDA
+  # ============================================================================
+
+  # 1. Lambda Error Rate Alarm
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-error-rate-alarm"
+      AlarmDescription: Alarm when any Lambda function error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EvidenceProcessorFunctionName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-lambda-error-rate-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 2. Lambda Duration Alarm
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-duration-alarm"
+      AlarmDescription: Alarm when any Lambda function duration exceeds 25 seconds
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 25000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EvidenceProcessorFunctionName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-lambda-duration-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 3. Lambda Throttle Alarm
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-lambda-throttle-alarm"
+      AlarmDescription: Alarm when any Lambda function experiences throttling
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EvidenceProcessorFunctionName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-lambda-throttle-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Error Rate Alarms for each function
+  EvidenceProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-evidence-processor-error-alarm"
+      AlarmDescription: Alarm when Evidence Processor error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EvidenceProcessorFunctionName
+
+  RemediationEngineErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-remediation-engine-error-alarm"
+      AlarmDescription: Alarm when Remediation Engine error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RemediationEngineFunctionName
+
+  ScorecardGeneratorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-scorecard-generator-error-alarm"
+      AlarmDescription: Alarm when Scorecard Generator error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ScorecardGeneratorFunctionName
+
+  AgingMonitorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-aging-monitor-error-alarm"
+      AlarmDescription: Alarm when Aging Monitor error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AgingMonitorFunctionName
+
+  ReportExporterErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-report-exporter-error-alarm"
+      AlarmDescription: Alarm when Report Exporter error rate exceeds 5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ReportExporterFunctionName
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - DYNAMODB
+  # ============================================================================
+
+  # 4. DynamoDB Read Throttle Alarm
+  DynamoDBReadThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-dynamodb-read-throttle-alarm"
+      AlarmDescription: Alarm when DynamoDB read throttles occur
+      MetricName: ReadThrottleEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: TableName
+          Value: !Ref MetadataTableName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-dynamodb-read-throttle-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # 5. DynamoDB Write Throttle Alarm
+  DynamoDBWriteThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-dynamodb-write-throttle-alarm"
+      AlarmDescription: Alarm when DynamoDB write throttles occur
+      MetricName: WriteThrottleEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: TableName
+          Value: !Ref MetadataTableName
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-dynamodb-write-throttle-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # CLOUDWATCH ALARMS - SNS
+  # ============================================================================
+
+  # 6. SNS Publish Failed Alarm
+  SNSPublishFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-sns-publish-failed-alarm"
+      AlarmDescription: Alarm when SNS publish failures occur
+      MetricName: NumberOfNotificationsFailed
+      Namespace: AWS/SNS
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      OKActions: !If [HasAlertEmail, !Ref MonitoringAlertTopic, !Ref "AWS::NoValue"]
+      Dimensions:
+        - Name: TopicName
+          Value: !Sub "${AWS::StackName}-alerts-${Environment}"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-sns-publish-failed-alarm"
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ============================================================================
+  # CLOUDWATCH DASHBOARD
+  # ============================================================================
+
+  GRCPlatformDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${AWS::StackName}-grc-dashboard-${Environment}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 2,
+              "properties": {
+                "markdown": "# GRC Evidence Platform Dashboard - ${Environment}\n\nReal-time monitoring for compliance evidence collection, remediation, and reporting."
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 2,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "${EvidenceProcessorFunctionName}"],
+                  [".", "Invocations", ".", "${RemediationEngineFunctionName}"],
+                  [".", "Invocations", ".", "${ScorecardGeneratorFunctionName}"],
+                  [".", "Invocations", ".", "${AgingMonitorFunctionName}"],
+                  [".", "Invocations", ".", "${ReportExporterFunctionName}"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Invocations",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 6,
+              "y": 2,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Errors", "FunctionName", "${EvidenceProcessorFunctionName}"],
+                  [".", "Errors", ".", "${RemediationEngineFunctionName}"],
+                  [".", "Errors", ".", "${ScorecardGeneratorFunctionName}"],
+                  [".", "Errors", ".", "${AgingMonitorFunctionName}"],
+                  [".", "Errors", ".", "${ReportExporterFunctionName}"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Errors",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 2,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${EvidenceProcessorFunctionName}"],
+                  [".", "Duration", ".", "${RemediationEngineFunctionName}"],
+                  [".", "Duration", ".", "${ScorecardGeneratorFunctionName}"],
+                  [".", "Duration", ".", "${AgingMonitorFunctionName}"],
+                  [".", "Duration", ".", "${ReportExporterFunctionName}"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (ms)",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 18,
+              "y": 2,
+              "width": 6,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Lambda", "Throttles", "FunctionName", "${EvidenceProcessorFunctionName}"],
+                  [".", "Throttles", ".", "${RemediationEngineFunctionName}"],
+                  [".", "Throttles", ".", "${ScorecardGeneratorFunctionName}"],
+                  [".", "Throttles", ".", "${AgingMonitorFunctionName}"],
+                  [".", "Throttles", ".", "${ReportExporterFunctionName}"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Lambda Throttles",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${MetadataTableName}"],
+                  [".", "ConsumedWriteCapacityUnits", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity - Metadata Table",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 8,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${RemediationLogTableName}"],
+                  [".", "ConsumedWriteCapacityUnits", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity - Remediation Log Table",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 8,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/DynamoDB", "ReadThrottleEvents", "TableName", "${MetadataTableName}"],
+                  [".", "WriteThrottleEvents", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Throttles",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 14,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/Config", "ResourceCompliance", {"stat": "Average", "period": 86400}]
+                ],
+                "period": 86400,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Config Compliance Status",
+                "yAxis": {"left": {"min": 0, "max": 100, "label": "Compliance %"}}
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 14,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/SNS", "NumberOfNotificationsDelivered", "TopicName", "${AWS::StackName}-alerts-${Environment}"],
+                  [".", "NumberOfNotificationsFailed", ".", "."]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "SNS Notifications",
+                "legend": {"position": "bottom"},
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "log",
+              "x": 0,
+              "y": 20,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "logGroupName": "/aws/lambda/${EvidenceProcessorFunctionName}",
+                "title": "Evidence Processor Logs",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            },
+            {
+              "type": "log",
+              "x": 12,
+              "y": 20,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "logGroupName": "/aws/lambda/${RemediationEngineFunctionName}",
+                "title": "Remediation Engine Logs",
+                "region": "${AWS::Region}",
+                "view": "table"
+              }
+            },
+            {
+              "type": "text",
+              "x": 0,
+              "y": 26,
+              "width": 24,
+              "height": 2,
+              "properties": {
+                "markdown": "## Alarm Status\n\n| Alarm | Status | Last Updated |\n|-------|--------|-------------|\n| Lambda Error Rate | ${LambdaErrorRateAlarm} | - |\n| Lambda Duration | ${LambdaDurationAlarm} | - |\n| Lambda Throttle | ${LambdaThrottleAlarm} | - |\n| DynamoDB Read Throttle | ${DynamoDBReadThrottleAlarm} | - |\n| DynamoDB Write Throttle | ${DynamoDBWriteThrottleAlarm} | - |\n| SNS Publish Failed | ${SNSPublishFailedAlarm} | - |"
+              }
+            }
+          ]
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-grc-dashboard"
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  DashboardUrl:
+    Description: URL of the CloudWatch Dashboard
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${AWS::StackName}-grc-dashboard-${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-DashboardUrl"
+
+  MonitoringAlertTopicArn:
+    Description: ARN of the Monitoring Alert SNS topic
+    Value: !If [HasAlertEmail, !Ref MonitoringAlertTopic, ""]
+    Export:
+      Name: !Sub "${AWS::StackName}-MonitoringAlertTopicArn"
+
+  LambdaErrorRateAlarmArn:
+    Description: ARN of the Lambda Error Rate alarm
+    Value: !GetAtt LambdaErrorRateAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaErrorRateAlarmArn"
+
+  LambdaDurationAlarmArn:
+    Description: ARN of the Lambda Duration alarm
+    Value: !GetAtt LambdaDurationAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaDurationAlarmArn"
+
+  LambdaThrottleAlarmArn:
+    Description: ARN of the Lambda Throttle alarm
+    Value: !GetAtt LambdaThrottleAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaThrottleAlarmArn"
+
+  DynamoDBReadThrottleAlarmArn:
+    Description: ARN of the DynamoDB Read Throttle alarm
+    Value: !GetAtt DynamoDBReadThrottleAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBReadThrottleAlarmArn"
+
+  DynamoDBWriteThrottleAlarmArn:
+    Description: ARN of the DynamoDB Write Throttle alarm
+    Value: !GetAtt DynamoDBWriteThrottleAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBWriteThrottleAlarmArn"
+
+  SNSPublishFailedAlarmArn:
+    Description: ARN of the SNS Publish Failed alarm
+    Value: !GetAtt SNSPublishFailedAlarm.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-SNSPublishFailedAlarmArn"

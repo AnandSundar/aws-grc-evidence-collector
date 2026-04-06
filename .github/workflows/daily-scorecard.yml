@@ -1,0 +1,268 @@
+name: Daily Scorecard
+
+# Trigger on schedule (6:00 AM UTC daily) and manual dispatch
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: 'Time period for scorecard (e.g., 24h, 7d, 30d)'
+        required: false
+        default: '24h'
+        type: string
+      send_notification:
+        description: 'Send notification after scorecard generation'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  # Job 1: Generate Compliance Scorecard
+  generate-scorecard:
+    name: Generate Compliance Scorecard
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # Step 2: Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+      
+      # Step 3: Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      # Step 4: Install dependencies
+      - name: Install dependencies
+        run: |
+          pip install boto3
+          pip install -r requirements.txt
+      
+      # Step 5: Create output directory
+      - name: Create output directory
+        run: |
+          mkdir -p output
+      
+      # Step 6: Run all collectors
+      - name: Run all collectors
+        run: |
+          python scripts/run_all_collectors.py --output-format json
+        continue-on-error: false
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+      
+      # Step 7: Generate scorecard
+      - name: Generate compliance scorecard
+        run: |
+          PERIOD="${{ github.event.inputs.period || '24h' }}"
+          python scripts/generate_report.py --type scorecard --period "$PERIOD"
+        continue-on-error: false
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+      
+      # Step 8: Upload scorecard as artifact
+      - name: Upload scorecard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-scorecard-${{ github.run_id }}
+          path: output/scorecard*.json
+          retention-days: 90
+          if-no-files-found: error
+      
+      # Step 9: Generate summary metrics
+      - name: Generate summary metrics
+        id: summary
+        run: |
+          # Find the latest scorecard file
+          SCORECARD_FILE=$(ls -t output/scorecard*.json | head -n 1)
+          
+          if [ -f "$SCORECARD_FILE" ]; then
+            # Extract key metrics using Python
+            python << 'EOF'
+import json
+import sys
+import os
+
+try:
+    scorecard_file = os.environ['SCORECARD_FILE']
+    with open(scorecard_file, 'r') as f:
+        data = json.load(f)
+    
+    # Extract summary information
+    summary = data.get('summary', {})
+    overall_score = summary.get('overall_score', 0)
+    total_controls = summary.get('total_controls', 0)
+    compliant_controls = summary.get('compliant_controls', 0)
+    non_compliant_controls = summary.get('non_compliant_controls', 0)
+    
+    # Set GitHub output
+    with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+        f.write(f"overall_score={overall_score}\n")
+        f.write(f"total_controls={total_controls}\n")
+        f.write(f"compliant_controls={compliant_controls}\n")
+        f.write(f"non_compliant_controls={non_compliant_controls}\n")
+    
+    # Print summary
+    print(f"Overall Score: {overall_score}%")
+    print(f"Total Controls: {total_controls}")
+    print(f"Compliant: {compliant_controls}")
+    print(f"Non-Compliant: {non_compliant_controls}")
+    
+except Exception as e:
+    print(f"Error processing scorecard: {e}")
+    sys.exit(1)
+EOF
+          else
+            echo "No scorecard file found"
+            exit 1
+          fi
+        env:
+          SCORECARD_FILE: ${{ steps.scorecard.outputs.path }}
+      
+      # Step 10: Send notification (optional)
+      - name: Send notification
+        if: github.event.inputs.send_notification != 'false'
+        run: |
+          # Check if SNS topic ARN is configured
+          if [ -n "${{ secrets.SNS_TOPIC_ARN }}" ]; then
+            echo "Sending notification via SNS..."
+            
+            # Prepare notification message
+            MESSAGE="Daily Compliance Scorecard Generated
+            
+Overall Score: ${{ steps.summary.outputs.overall_score }}%
+Total Controls: ${{ steps.summary.outputs.total_controls }}
+Compliant: ${{ steps.summary.outputs.compliant_controls }}
+Non-Compliant: ${{ steps.summary.outputs.non_compliant_controls }}
+
+Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+            
+            # Send SNS notification
+            aws sns publish \
+              --topic-arn "${{ secrets.SNS_TOPIC_ARN }}" \
+              --subject "GRC Platform Daily Scorecard - Score: ${{ steps.summary.outputs.overall_score }}%" \
+              --message "$MESSAGE" \
+              --region us-east-1
+            
+            echo "SNS notification sent successfully"
+          else
+            echo "SNS_TOPIC_ARN not configured, skipping SNS notification"
+          fi
+          
+          # Check if Slack webhook URL is configured
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            echo "Sending notification via Slack..."
+            
+            # Determine emoji based on score
+            SCORE=${{ steps.summary.outputs.overall_score }}
+            if [ "$SCORE" -ge 90 ]; then
+              EMOJI=":white_check_mark:"
+            elif [ "$SCORE" -ge 70 ]; then
+              EMOJI=":warning:"
+            else
+              EMOJI=":x:"
+            fi
+            
+            # Prepare Slack payload
+            PAYLOAD=$(cat <<EOF
+{
+  "text": "$EMOJI Daily Compliance Scorecard - Score: ${{ steps.summary.outputs.overall_score }}%",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "$EMOJI Daily Compliance Scorecard"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Overall Score:*\n${{ steps.summary.outputs.overall_score }}%"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Total Controls:*\n${{ steps.summary.outputs.total_controls }}"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Compliant:*\n${{ steps.summary.outputs.compliant_controls }}"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Non-Compliant:*\n${{ steps.summary.outputs.non_compliant_controls }}"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Full Results>"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "Generated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+        }
+      ]
+    }
+  ]
+}
+EOF
+)
+            
+            # Send Slack notification
+            curl -X POST \
+              -H 'Content-Type: application/json' \
+              -d "$PAYLOAD" \
+              "${{ secrets.SLACK_WEBHOOK_URL }}"
+            
+            echo "Slack notification sent successfully"
+          else
+            echo "SLACK_WEBHOOK_URL not configured, skipping Slack notification"
+          fi
+        continue-on-error: true
+        env:
+          AWS_DEFAULT_REGION: us-east-1
+      
+      # Step 11: Create job summary
+      - name: Create job summary
+        if: always()
+        run: |
+          echo "## 📊 Daily Compliance Scorecard Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Overall Score | ${{ steps.summary.outputs.overall_score }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total Controls | ${{ steps.summary.outputs.total_controls }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Compliant Controls | ${{ steps.summary.outputs.compliant_controls }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Non-Compliant Controls | ${{ steps.summary.outputs.non_compliant_controls }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Scorecard: \`daily-scorecard-${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Workflow Details" >> $GITHUB_STEP_SUMMARY
+          echo "- Run ID: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run Number: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Triggered: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY

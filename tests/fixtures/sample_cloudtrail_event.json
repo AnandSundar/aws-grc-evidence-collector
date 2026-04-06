@@ -1,0 +1,310 @@
+{
+    "events": {
+        "delete_trail": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "IAMUser",
+                "principalId": "AIDACKCEVSQ6C2EXAMPLE",
+                "arn": "arn:aws:iam::123456789012:user/malicious-user",
+                "accountId": "123456789012",
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "userName": "malicious-user"
+            },
+            "eventTime": "2024-01-15T10:30:00Z",
+            "eventSource": "cloudtrail.amazonaws.com",
+            "eventName": "DeleteTrail",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "192.0.2.1",
+            "userAgent": "aws-cli/2.13.0 Python/3.11.6 Linux/5.15.0-1035-aws botocore/2.13.0",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": {
+                "name": "security-trail"
+            },
+            "responseElements": {
+                "requestId": "EXAMPLE1-901a-11eb-9b43-0242ac130002"
+            },
+            "additionalEventData": {
+                "MFAUsed": "No"
+            },
+            "requestID": "EXAMPLE1-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE1-901a-11eb-9b43-0242ac130002",
+            "readOnly": false,
+            "eventType": "AwsApiCall",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2013-11-01",
+            "mitre_technique": "T1562.008",
+            "mitre_tactic": "Defense Evasion"
+        },
+        "console_login_root": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "Root",
+                "principalId": "123456789012",
+                "arn": "arn:aws:iam::123456789012:root",
+                "accountId": "123456789012",
+                "userName": "root"
+            },
+            "eventTime": "2024-01-15T11:00:00Z",
+            "eventSource": "signin.amazonaws.com",
+            "eventName": "ConsoleLogin",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "198.51.100.1",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": null,
+            "responseElements": {
+                "ConsoleLogin": "Success"
+            },
+            "additionalEventData": {
+                "LoginTo": "https://console.aws.amazon.com/",
+                "MobileVersion": "No",
+                "MFAUsed": "No",
+                "SamlProviderArn": null,
+                "SourceIdentity": null
+            },
+            "requestID": "EXAMPLE2-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE2-901a-11eb-9b43-0242ac130002",
+            "readOnly": false,
+            "eventType": "AwsConsoleSignIn",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2015-09-21",
+            "mitre_technique": "T1078.004",
+            "mitre_tactic": "Privilege Escalation"
+        },
+        "authorize_security_group_ingress": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "IAMUser",
+                "principalId": "AIDACKCEVSQ6C2EXAMPLE",
+                "arn": "arn:aws:iam::123456789012:user/dev-user",
+                "accountId": "123456789012",
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "userName": "dev-user"
+            },
+            "eventTime": "2024-01-15T11:30:00Z",
+            "eventSource": "ec2.amazonaws.com",
+            "eventName": "AuthorizeSecurityGroupIngress",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "203.0.113.1",
+            "userAgent": "aws-cli/2.13.0 Python/3.11.6 Linux/5.15.0-1035-aws botocore/2.13.0",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": {
+                "groupId": "sg-0123456789abcdef0",
+                "ipPermissions": {
+                    "items": [
+                        {
+                            "ipProtocol": "tcp",
+                            "fromPort": 22,
+                            "toPort": 22,
+                            "groups": {},
+                            "ipRanges": {
+                                "items": [
+                                    {
+                                        "cidrIp": "0.0.0.0/0"
+                                    }
+                                ]
+                            },
+                            "ipv6Ranges": {},
+                            "prefixListIds": {}
+                        }
+                    ]
+                }
+            },
+            "responseElements": {
+                "requestId": "EXAMPLE3-901a-11eb-9b43-0242ac130002"
+            },
+            "additionalEventData": {
+                "MFAUsed": "Yes"
+            },
+            "requestID": "EXAMPLE3-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE3-901a-11eb-9b43-0242ac130002",
+            "readOnly": false,
+            "eventType": "AwsApiCall",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2016-11-15",
+            "mitre_technique": "T1190",
+            "mitre_tactic": "Initial Access"
+        },
+        "create_user": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "IAMUser",
+                "principalId": "AIDACKCEVSQ6C2EXAMPLE",
+                "arn": "arn:aws:iam::123456789012:user/admin-user",
+                "accountId": "123456789012",
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "userName": "admin-user"
+            },
+            "eventTime": "2024-01-15T12:00:00Z",
+            "eventSource": "iam.amazonaws.com",
+            "eventName": "CreateUser",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "192.0.2.100",
+            "userAgent": "console.amazonaws.com",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": {
+                "userName": "new-service-user"
+            },
+            "responseElements": {
+                "user": {
+                    "userName": "new-service-user",
+                    "arn": "arn:aws:iam::123456789012:user/new-service-user",
+                    "userId": "AIDACKCEVSQ6C2EXAMPLE2",
+                    "createDate": "2024-01-15T12:00:00Z",
+                    "path": "/"
+                }
+            },
+            "additionalEventData": {
+                "MFAUsed": "Yes"
+            },
+            "requestID": "EXAMPLE4-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE4-901a-11eb-9b43-0242ac130002",
+            "readOnly": false,
+            "eventType": "AwsApiCall",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2010-05-08",
+            "mitre_technique": "T1136.003",
+            "mitre_tactic": "Persistence"
+        },
+        "run_instances": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "IAMUser",
+                "principalId": "AIDACKCEVSQ6C2EXAMPLE",
+                "arn": "arn:aws:iam::123456789012:user/devops-user",
+                "accountId": "123456789012",
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "userName": "devops-user"
+            },
+            "eventTime": "2024-01-15T12:30:00Z",
+            "eventSource": "ec2.amazonaws.com",
+            "eventName": "RunInstances",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "198.51.100.100",
+            "userAgent": "aws-sdk-java/1.12.500 Linux/5.15.0-1035-aws OpenJDK_64-Bit_Server_VM/17.0.8+11",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": {
+                "imageId": "ami-0abcdef1234567890",
+                "instanceType": "t3.micro",
+                "minCount": 1,
+                "maxCount": 1,
+                "keyName": "devops-key",
+                "securityGroupIds": {
+                    "items": [
+                        {
+                            "groupId": "sg-0123456789abcdef0"
+                        }
+                    ]
+                },
+                "subnetId": "subnet-0123456789abcdef0",
+                "tagSpecification": {
+                    "resourceType": "instance",
+                    "tags": {
+                        "items": [
+                            {
+                                "key": "Name",
+                                "value": "devops-instance"
+                            },
+                            {
+                                "key": "Environment",
+                                "value": "production"
+                            }
+                        ]
+                    }
+                }
+            },
+            "responseElements": {
+                "requestId": "EXAMPLE5-901a-11eb-9b43-0242ac130002",
+                "reservationId": "r-0123456789abcdef0",
+                "instancesSet": {
+                    "items": [
+                        {
+                            "instanceId": "i-0123456789abcdef0",
+                            "instanceType": "t3.micro",
+                            "imageId": "ami-0abcdef1234567890",
+                            "state": {
+                                "code": 0,
+                                "name": "pending"
+                            },
+                            "launchTime": "2024-01-15T12:30:00Z"
+                        }
+                    ]
+                }
+            },
+            "additionalEventData": {
+                "MFAUsed": "Yes"
+            },
+            "requestID": "EXAMPLE5-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE5-901a-11eb-9b43-0242ac130002",
+            "readOnly": false,
+            "eventType": "AwsApiCall",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2016-11-15",
+            "mitre_technique": "T1078.001",
+            "mitre_tactic": "Execution"
+        },
+        "describe_instances": {
+            "eventVersion": "1.08",
+            "userIdentity": {
+                "type": "IAMUser",
+                "principalId": "AIDACKCEVSQ6C2EXAMPLE",
+                "arn": "arn:aws:iam::123456789012:user/monitoring-user",
+                "accountId": "123456789012",
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "userName": "monitoring-user"
+            },
+            "eventTime": "2024-01-15T13:00:00Z",
+            "eventSource": "ec2.amazonaws.com",
+            "eventName": "DescribeInstances",
+            "awsRegion": "us-east-1",
+            "sourceIPAddress": "203.0.113.100",
+            "userAgent": "aws-cli/2.13.0 Python/3.11.6 Linux/5.15.0-1035-aws botocore/2.13.0",
+            "errorCode": "",
+            "errorMessage": "",
+            "requestParameters": {
+                "maxResults": 50,
+                "filters": {
+                    "items": [
+                        {
+                            "name": "instance-state-name",
+                            "values": {
+                                "items": [
+                                    {
+                                        "value": "running"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            "responseElements": null,
+            "additionalEventData": {
+                "MFAUsed": "No"
+            },
+            "requestID": "EXAMPLE6-901a-11eb-9b43-0242ac130002",
+            "eventID": "EXAMPLE6-901a-11eb-9b43-0242ac130002",
+            "readOnly": true,
+            "eventType": "AwsApiCall",
+            "managementEvent": true,
+            "recipientAccountId": "123456789012",
+            "eventCategory": "Management",
+            "apiVersion": "2016-11-15"
+        }
+    }
+}
