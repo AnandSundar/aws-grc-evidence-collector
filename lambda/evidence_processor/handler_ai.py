@@ -307,10 +307,10 @@ Respond in JSON format with the following structure:
     "affected_resources": ["<resource1>", "<resource2>"],
     "recommended_actions": ["<action1>", "<action2>"],
     "compliance_impact": ["<framework1>", "<framework2>"]
-}}"""
+ }}"""
 
-        # Invoke Claude 3 Sonnet model
-        model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
+        # Invoke Nemotron Nano 12B v2 model
+        model_id = "nvidia.nemotron-nano-12b-v2"
 
         response = bedrock_runtime.invoke_model(
             modelId=model_id,
@@ -318,16 +318,17 @@ Respond in JSON format with the following structure:
             accept="application/json",
             body=json.dumps(
                 {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 2048,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "prompt": prompt,
+                    "max_gen_len": 2048,
+                    "temperature": 0.1,
+                    "top_p": 0.9,
                 }
             ),
         )
 
-        # Parse response
+        # Parse response (Nemotron format: results[0].sequence)
         response_body = json.loads(response["body"].read().decode("utf-8"))
-        content = response_body.get("content", [{}])[0].get("text", "")
+        content = response_body.get("results", [{}])[0].get("sequence", "")
 
         # Extract JSON from the response
         try:

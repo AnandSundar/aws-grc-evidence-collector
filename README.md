@@ -779,7 +779,7 @@ aws dynamodb query \
 
 ### AI-Powered Risk Analysis (Optional)
 
-- **AWS Bedrock Integration**: Uses Claude 3 Sonnet for analysis
+- **AWS Bedrock Integration**: Uses NVIDIA Nemotron Nano 12B v2 for analysis
 - **Contextual Assessment**: Evaluates findings in business context
 - **Intelligent Prioritization**: Automatically prioritizes high-impact issues
 - **Recommendations**: Provides actionable remediation suggestions
@@ -1696,10 +1696,10 @@ aws iam get-role-policy \
   --policy-name EvidenceProcessorPolicy
 ```
 
-3. Ensure the model is available in your region:
+ 3. Ensure the model is available in your region:
 ```bash
 aws bedrock list-foundation-models \
-  --query 'modelSummaries[?contains(modelId, `claude-3`)]'
+  --query 'modelSummaries[?contains(modelId, `nemotron`)]'
 ```
 
 ### Debugging Tips

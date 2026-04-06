@@ -25,7 +25,7 @@ An AI-powered Governance, Risk, and Compliance (GRC) evidence collector built on
 - AWS CLI configured (`aws configure`)
 - Python 3.11+
 - IAM permissions to create resources (S3, DynamoDB, Lambda, IAM, SNS, EventBridge, CloudTrail)
-- (For Version 2) Model access requested for `anthropic.claude-3-sonnet-20240229-v1:0` in AWS Bedrock (us-east-1)
+- (For Version 2) Model access requested for `nvidia.nemotron-nano-12b-v2` in AWS Bedrock (us-east-1)
 
 ## One-Command Deployment
 
