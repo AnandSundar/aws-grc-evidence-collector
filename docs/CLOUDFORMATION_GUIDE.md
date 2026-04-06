@@ -5,9 +5,9 @@ This guide details the deployment of Version 2 of the AWS GRC Evidence Collector
 ## Prerequisites
 
 1. **AWS Bedrock Model Access:**
-   Before deploying with AI enabled, you must request access to the Claude 3 Sonnet model in the AWS Bedrock console.
+   Before deploying with AI enabled, you must request access to the NVIDIA Nemotron Nano 12B v2 model in the AWS Bedrock console.
    - Go to AWS Console -> Amazon Bedrock -> Model access.
-   - Request access to `Anthropic Claude 3 Sonnet`.
+   - Request access to `NVIDIA Nemotron Nano 12B v2`.
    - Wait for access to be granted (usually instant).
 
 2. **Python Dependencies:**

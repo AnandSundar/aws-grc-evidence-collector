@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/test_excel_generation.py)",
+      "Bash(python scripts/verify_nemotron_migration.py)",
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('cloudformation/grc-platform-template.yaml'\\)\\)\")"
+    ]
+  }
+}

@@ -165,11 +165,11 @@ Resources:
         - PolicyName: EvidenceProcessorBedrockPolicy
           PolicyDocument:
             Version: '2012-10-17'
-             Statement:
-               - Sid: BedrockInvoke
-                 Effect: Allow
-                 Action: 'bedrock:InvokeModel'
-                 Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/nvidia.nemotron-nano-12b-v2"
+            Statement:
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action: 'bedrock:InvokeModel'
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/nvidia.nemotron-nano-12b-v2"
                 Condition:
                   StringEquals:
                     'aws:PrincipalTag/Environment': !Ref Environment

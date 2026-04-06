@@ -20,6 +20,16 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, asdict
 from botocore.exceptions import ClientError
 
+# Import Excel generator
+try:
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'reports'))
+    from excel_generator import ExcelReportGenerator
+    EXCEL_AVAILABLE = True
+except ImportError:
+    EXCEL_AVAILABLE = False
+    logging.warning("Excel generator not available. Excel reports will not be generated.")
+
 # Configure logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -513,6 +523,135 @@ def generate_csv_evidence_matrix(
     return output.getvalue()
 
 
+def generate_excel_report(
+    evidence_list: List[Dict[str, Any]],
+    remediation_list: List[Dict[str, Any]],
+    scorecards: List[Dict[str, Any]],
+    audit_report: AuditReport
+) -> Optional[bytes]:
+    """
+    Generate Excel report with multiple sheets.
+
+    Args:
+        evidence_list: List of evidence records
+        remediation_list: List of remediation records
+        scorecards: List of scorecard records
+        audit_report: Audit report object
+
+    Returns:
+        Excel bytes or None if generation fails
+    """
+    if not EXCEL_AVAILABLE:
+        logger.warning(f"{Colors.WARNING}Excel generator not available. Skipping Excel report generation.{Colors.ENDC}")
+        return None
+
+    try:
+        generator = ExcelReportGenerator()
+
+        # Prepare findings data for Excel
+        findings_data = []
+        for evidence in evidence_list:
+            # Extract resource ID
+            resources = evidence.get("resources", [])
+            resource_id = resources[0].get("ARN", "N/A") if resources else "N/A"
+
+            # Get compliance frameworks
+            frameworks = evidence.get("compliance_frameworks", "[]")
+            if isinstance(frameworks, str):
+                try:
+                    frameworks = json.loads(frameworks)
+                except json.JSONDecodeError:
+                    frameworks = [frameworks]
+
+            finding = {
+                'evidence_id': evidence.get("event_id", "N/A"),
+                'event_name': evidence.get("event_name", "N/A"),
+                'event_time': evidence.get("event_time", "N/A"),
+                'resource_type': evidence.get("resource_type", "N/A"),
+                'resource_id': resource_id,
+                'priority': evidence.get("priority", "LOW"),
+                'control_status': evidence.get("control_status", "UNKNOWN"),
+                'risk_score': evidence.get("ai_risk_score", 0),
+                'risk_level': "HIGH" if evidence.get("ai_risk_score", 0) > 7 else "MEDIUM" if evidence.get("ai_risk_score", 0) > 4 else "LOW",
+                'finding_title': evidence.get("finding_title", "N/A"),
+                'finding_description': evidence.get("finding_description", "N/A"),
+                'compliance_frameworks': frameworks,
+                'remediation_available': "Yes" if evidence.get("remediation_status") == "PENDING" else "No",
+                'remediation_action': evidence.get("remediation_action", "N/A"),
+                'user_identity': evidence.get("user_identity", {}).get("username", "N/A"),
+                'source_ip': evidence.get("source_ip_address", "N/A"),
+                'aws_region': evidence.get("aws_region", "N/A"),
+                'ai_analyzed': "Yes" if evidence.get("ai_analyzed") else "No",
+                'model_used': evidence.get("ai_model_used", "N/A"),
+                'collected_at': evidence.get("created_at", "N/A")
+            }
+            findings_data.append(finding)
+
+        # Prepare remediations data for Excel
+        remediations_data = []
+        for remediation in remediation_list:
+            remediations_data.append({
+                'id': remediation.get("id", "N/A"),
+                'resource_id': remediation.get("resource_id", "N/A"),
+                'resource_type': remediation.get("resource_type", "N/A"),
+                'remediation_type': remediation.get("remediation_type", "N/A"),
+                'execution_mode': remediation.get("execution_mode", "DRY_RUN"),
+                'status': remediation.get("action_status", "PENDING"),
+                'action_taken': remediation.get("action_taken", "N/A"),
+                'result': remediation.get("result", "N/A"),
+                'error': remediation.get("error_message", "N/A"),
+                'triggered_by': remediation.get("triggered_by", "N/A"),
+                'triggered_at': remediation.get("created_at", "N/A"),
+                'completed_at': remediation.get("updated_at", "N/A"),
+                'success': remediation.get("action_status") == "SUCCESS"
+            })
+
+        # Prepare compliance data for Excel
+        compliance_frameworks = []
+        for fc in audit_report.framework_coverage:
+            compliance_frameworks.append({
+                'framework_name': fc['framework_name'],
+                'version': '1.0',
+                'total_controls': fc['total_tested'],
+                'passed': fc['passing'],
+                'failed': fc['failing'],
+                'not_applicable': 0,
+                'compliance_percentage': round(fc['score'], 2),
+                'status': 'COMPLIANT' if fc['score'] >= 80 else 'NON_COMPLIANT'
+            })
+
+        # Prepare summary data for Excel
+        summary_data = {
+            'report_period': f"{audit_report.report_period_start} to {audit_report.report_period_end}",
+            'overall_risk_score': audit_report.overall_risk_score,
+            'total_evidence': audit_report.evidence_collection_summary['total_records'],
+            'critical_findings': len([f for f in audit_report.critical_high_findings if f['priority'] == 'CRITICAL']),
+            'high_findings': len([f for f in audit_report.critical_high_findings if f['priority'] == 'HIGH']),
+            'successful_remediations': sum(1 for r in remediation_list if r.get("action_status") == "SUCCESS"),
+            'failed_remediations': sum(1 for r in remediation_list if r.get("action_status") == "FAILED"),
+            'compliance_score': round(100 - audit_report.overall_risk_score, 2)
+        }
+
+        # Generate comprehensive Excel report
+        generator.generate_comprehensive_report(
+            findings=findings_data,
+            remediations=remediations_data,
+            compliance_data={'frameworks': compliance_frameworks},
+            summary_data=summary_data
+        )
+
+        # Get Excel bytes
+        excel_bytes = generator.get_workbook_bytes()
+        logger.info(f"{Colors.OKGREEN}Excel report generated successfully{Colors.ENDC}")
+
+        return excel_bytes
+
+    except Exception as e:
+        logger.error(f"{Colors.FAIL}Failed to generate Excel report: {e}{Colors.ENDC}")
+        logger.exception(f"{Colors.FAIL}Full traceback:{Colors.ENDC}")
+        return None
+
+
 def generate_audit_report(
     account_id: str,
     start_date: datetime,
@@ -601,9 +740,10 @@ def store_report(
     report_date: str,
     audit_report: AuditReport,
     csv_matrix: str,
+    excel_bytes: Optional[bytes] = None,
 ) -> Dict[str, str]:
     """
-    Store audit report and CSV matrix to S3.
+    Store audit report, CSV matrix, and Excel report to S3.
 
     Args:
         s3_client: Boto3 S3 client
@@ -611,6 +751,7 @@ def store_report(
         report_date: Report date string
         audit_report: Audit report object
         csv_matrix: CSV evidence matrix string
+        excel_bytes: Optional Excel report bytes
 
     Returns:
         Dictionary with S3 paths
@@ -650,6 +791,24 @@ def store_report(
         )
     except ClientError as e:
         logger.error(f"{Colors.FAIL}Failed to store CSV matrix: {e}{Colors.ENDC}")
+
+    # Store Excel report if available
+    if excel_bytes:
+        excel_key = f"reports/{report_date}/grc-evidence-report-{report_date}.xlsx"
+        try:
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=excel_key,
+                Body=excel_bytes,
+                ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ServerSideEncryption="AES256",
+            )
+            s3_paths["excel_report"] = f"s3://{bucket_name}/{excel_key}"
+            logger.info(
+                f"{Colors.OKGREEN}Excel report stored: {s3_paths['excel_report']}{Colors.ENDC}"
+            )
+        except ClientError as e:
+            logger.error(f"{Colors.FAIL}Failed to store Excel report: {e}{Colors.ENDC}")
 
     return s3_paths
 
@@ -718,6 +877,24 @@ def send_report_notification(
         ]
     )
 
+    # Build report downloads section
+    downloads_section = f"""REPORT DOWNLOADS
+----------------
+JSON Report (valid for 7 days):
+{presigned_urls.get('json_report', s3_paths.get('json_report', 'N/A'))}
+
+CSV Evidence Matrix (valid for 7 days):
+{presigned_urls.get('csv_matrix', s3_paths.get('csv_matrix', 'N/A'))}"""
+
+    # Add Excel report link if available
+    if 'excel_report' in s3_paths:
+        downloads_section += f"""
+
+Excel Report (valid for 7 days):
+{presigned_urls.get('excel_report', s3_paths.get('excel_report', 'N/A'))}"""
+
+    downloads_section += "\n\nView the full report in the GRC Platform console."
+
     message = f"""
 GRC Platform - Audit Report Available
 ======================================
@@ -755,15 +932,7 @@ Auto-Remediations: {len(audit_report.auto_remediation_log)}
   • Successful: {sum(1 for r in audit_report.auto_remediation_log if r['action_status'] == 'SUCCESS')}
   • Failed: {sum(1 for r in audit_report.auto_remediation_log if r['action_status'] == 'FAILED')}
 
-REPORT DOWNLOADS
-----------------
-JSON Report (valid for 7 days):
-{presigned_urls.get('json_report', s3_paths.get('json_report', 'N/A'))}
-
-CSV Evidence Matrix (valid for 7 days):
-{presigned_urls.get('csv_matrix', s3_paths.get('csv_matrix', 'N/A'))}
-
-View the full report in the GRC Platform console.
+{downloads_section}
 """
 
     try:
@@ -868,9 +1037,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Generate CSV evidence matrix
         csv_matrix = generate_csv_evidence_matrix(evidence_list, remediation_list)
 
+        # Generate Excel report
+        excel_bytes = generate_excel_report(
+            evidence_list,
+            remediation_list,
+            scorecards,
+            audit_report
+        )
+
         # Store reports to S3
         s3_paths = store_report(
-            s3_client, report_bucket, report_date, audit_report, csv_matrix
+            s3_client, report_bucket, report_date, audit_report, csv_matrix, excel_bytes
         )
 
         # Generate pre-signed URLs
@@ -885,6 +1062,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             csv_key = s3_paths["csv_matrix"].replace(f"s3://{report_bucket}/", "")
             presigned_urls["csv_matrix"] = generate_presigned_url(
                 s3_client, report_bucket, csv_key
+            )
+
+        if "excel_report" in s3_paths:
+            excel_key = s3_paths["excel_report"].replace(f"s3://{report_bucket}/", "")
+            presigned_urls["excel_report"] = generate_presigned_url(
+                s3_client, report_bucket, excel_key
             )
 
         # Send notification

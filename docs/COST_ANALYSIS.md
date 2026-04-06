@@ -80,12 +80,14 @@ The GRC Evidence Platform is designed to be cost-effective, leveraging AWS Free 
 | Service | Usage | Monthly Cost | Free Tier |
 |---------|-------|--------------|-----------|
 | Base (Option 1) | | $4.18 | |
-| Bedrock Claude 3 Sonnet (est. 50 events/day, ~500 tokens each) | 1,500 events/month, 750,000 tokens | $0.75 | ❌ Not Free Tier |
-| **TOTAL OPTION 2** | | **~$4.93/month** | |
+| Bedrock Nemotron Nano 12B v2 (est. 50 events/day, ~500 tokens each) | 1,500 events/month, 750,000 tokens | $0.15 | ❌ Not Free Tier |
+| **TOTAL OPTION 2** | | **~$4.33/month** | |
 
 **AI Cost Breakdown**:
-- Claude 3 Sonnet Input: $3.00 per 1M tokens
-- Claude 3 Sonnet Output: $15.00 per 1M tokens
+- Nemotron Nano 12B v2: ~$0.20 per 1M tokens (estimated)
+- Estimated: 50 events/day × 30 days = 1,500 events
+- Average 500 tokens per event (300 input, 200 output)
+- Total: 750,000 tokens × $0.20/1M = $0.15/month
 - Estimated: 50 events/day × 30 days = 1,500 events
 - Average 500 tokens per event (300 input, 200 output)
 - Input: 1,500 × 300 = 450,000 tokens × $3.00/1M = $1.35
@@ -374,17 +376,19 @@ The GRC Evidence Platform is designed to be cost-effective, leveraging AWS Free 
 
 ### AWS Bedrock (AI)
 
-**Model**: Claude 3 Sonnet
+**Model**: NVIDIA Nemotron Nano 12B v2
 
 | Component | Usage | Monthly Cost |
 |-----------|-------|--------------|
-| Claude 3 Sonnet Input | 450,000 tokens | $1.35 |
-| Claude 3 Sonnet Output | 300,000 tokens | $4.50 |
-| **TOTAL** | | **$5.85/month** |
+| Nemotron Nano 12B v2 (estimated) | 750,000 tokens | $0.15 |
+| **TOTAL** | | **$0.15/month** |
 
 **Bedrock Pricing**:
 - Free Tier: Not available for Bedrock
-- Claude 3 Sonnet Input: $3.00 per 1M tokens
+- Nemotron Nano 12B v2: ~$0.20 per 1M tokens (estimated, actual pricing may vary)
+- Estimated: 50 events/day × 30 days = 1,500 events
+- Average 500 tokens per event (300 input, 200 output)
+- Total: 750,000 tokens × $0.20/1M = $0.15/month
 - Claude 3 Sonnet Output: $15.00 per 1M tokens
 - Current Usage: 1,500 events × 500 tokens = 750,000 tokens
 - Conservative Estimate: $0.75/month (with optimization)

@@ -290,11 +290,11 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "arn:aws:logs:*:*:*"
               - !If
-                 - IsAIEnabled
-                 - Effect: Allow
-                   Action:
-                     - bedrock:InvokeModel
-                   Resource: "arn:aws:bedrock:*::foundation-model/nvidia.nemotron-nano-12b-v2"
+                - IsAIEnabled
+                - Effect: Allow
+                  Action:
+                    - bedrock:InvokeModel
+                  Resource: "arn:aws:bedrock:*::foundation-model/nvidia.nemotron-nano-12b-v2"
                   Condition:
                     StringEquals:
                       aws:RequestedRegion: "us-east-1"

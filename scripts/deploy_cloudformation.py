@@ -587,7 +587,7 @@ class CloudFormationDeployer:
             return False
 
     def update_stack(
-        self, alert_email: Optional[str] = None, environment: Optional[str] = None
+        self, alert_email: Optional[str] = None, environment: Optional[str] = None, force: bool = False
     ) -> bool:
         """
         Update an existing CloudFormation stack.
@@ -595,6 +595,7 @@ class CloudFormationDeployer:
         Args:
             alert_email: New email address for alerts (optional)
             environment: New environment name (optional)
+            force: Force update even if no parameters changed
 
         Returns:
             True if update succeeded, False otherwise
@@ -627,6 +628,11 @@ class CloudFormationDeployer:
                 current_params["AlertEmail"] = alert_email
             if environment:
                 current_params["Environment"] = environment
+
+            # If not forcing update and no changes, check if there are actual changes
+            if not force and not alert_email and not environment:
+                print_warning("No parameter changes to apply.")
+                print_info("CloudFormation may still detect template changes.")
 
             # Convert to CloudFormation format
             cf_parameters = [
@@ -834,9 +840,13 @@ class CloudFormationDeployer:
                 break
 
             elif choice == "1":
+                print_colored("\n📧 Email Configuration for Daily Scorecards", Colors.CYAN)
+                print_colored("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Colors.CYAN)
                 alert_email = input(
-                    "Enter alert email (optional, press Enter to skip): "
+                    "Enter alert email for daily scorecard notifications (recommended): "
                 ).strip()
+                if not alert_email:
+                    print_warning("No email provided - you won't receive daily scorecard emails!")
                 environment = (
                     input("Enter environment (dev/staging/prod) [dev]: ").strip()
                     or "dev"
@@ -844,9 +854,13 @@ class CloudFormationDeployer:
                 self.deploy_stack("no_ai_no_remediation", alert_email, environment)
 
             elif choice == "2":
+                print_colored("\n📧 Email Configuration for Daily Scorecards", Colors.CYAN)
+                print_colored("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Colors.CYAN)
                 alert_email = input(
-                    "Enter alert email (optional, press Enter to skip): "
+                    "Enter alert email for daily scorecard notifications (recommended): "
                 ).strip()
+                if not alert_email:
+                    print_warning("No email provided - you won't receive daily scorecard emails!")
                 environment = (
                     input("Enter environment (dev/staging/prod) [dev]: ").strip()
                     or "dev"
@@ -854,9 +868,13 @@ class CloudFormationDeployer:
                 self.deploy_stack("ai_only", alert_email, environment)
 
             elif choice == "3":
+                print_colored("\n📧 Email Configuration for Daily Scorecards", Colors.CYAN)
+                print_colored("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Colors.CYAN)
                 alert_email = input(
-                    "Enter alert email (optional, press Enter to skip): "
+                    "Enter alert email for daily scorecard notifications (recommended): "
                 ).strip()
+                if not alert_email:
+                    print_warning("No email provided - you won't receive daily scorecard emails!")
                 environment = (
                     input("Enter environment (dev/staging/prod) [dev]: ").strip()
                     or "dev"
@@ -864,9 +882,13 @@ class CloudFormationDeployer:
                 self.deploy_stack("remediation_only", alert_email, environment)
 
             elif choice == "4":
+                print_colored("\n📧 Email Configuration for Daily Scorecards", Colors.CYAN)
+                print_colored("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", Colors.CYAN)
                 alert_email = input(
-                    "Enter alert email (optional, press Enter to skip): "
+                    "Enter alert email for daily scorecard notifications (recommended): "
                 ).strip()
+                if not alert_email:
+                    print_warning("No email provided - you won't receive daily scorecard emails!")
                 environment = (
                     input("Enter environment (dev/staging/prod) [dev]: ").strip()
                     or "dev"
@@ -887,7 +909,14 @@ class CloudFormationDeployer:
                     or None
                 )
                 if alert_email is None and environment is None:
-                    print_warning("No changes specified.")
+                    print_warning("No parameter changes specified.")
+                    print_info("However, Lambda code or templates may have changed.")
+                    force_update = input("Force update to apply code changes? (yes/no): ").strip().lower()
+                    if force_update in ['yes', 'y']:
+                        print_info("Forcing stack update to apply Lambda code changes...")
+                        self.update_stack(None, None, force=True)
+                    else:
+                        print_info("Update cancelled.")
                 else:
                     self.update_stack(alert_email, environment)
 

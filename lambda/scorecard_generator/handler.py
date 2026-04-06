@@ -416,13 +416,23 @@ def store_scorecard(
 
     try:
         scorecard_dict = asdict(scorecard)
-        s3_client.put_object(
-            Bucket=s3_bucket,
-            Key=s3_key,
-            Body=json.dumps(scorecard_dict, indent=2),
-            ContentType="application/json",
-            ServerSideEncryption="AES256",
-        )
+        # Get KMS key from environment
+        kms_key = os.environ.get("KMS_KEY")
+
+        # Prepare S3 put parameters
+        s3_params = {
+            "Bucket": s3_bucket,
+            "Key": s3_key,
+            "Body": json.dumps(scorecard_dict, indent=2),
+            "ContentType": "application/json",
+        }
+
+        # Add KMS encryption if key is available
+        if kms_key:
+            s3_params["ServerSideEncryption"] = "aws:kms"
+            s3_params["SSEKeyId"] = kms_key
+
+        s3_client.put_object(**s3_params)
         logger.info(
             f"{Colors.OKGREEN}Scorecard stored to S3: s3://{s3_bucket}/{s3_key}{Colors.ENDC}"
         )
