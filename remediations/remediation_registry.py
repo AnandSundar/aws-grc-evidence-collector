@@ -304,7 +304,7 @@ def execute_remediation(
 
     if not remediation_function:
         execution_log["error"] = f"No remediation function found for trigger: {trigger}"
-        logger.error(f"{Colors.RED}✗ {execution_log['error']}{Colors.RESET}")
+        logger.error(f"{Colors.RED}[FAIL] {execution_log['error']}{Colors.RESET}")
         return execution_log
 
     # Get registry entry for additional context
@@ -343,18 +343,18 @@ def execute_remediation(
 
         if execution_log["success"]:
             logger.info(
-                f"{Colors.GREEN}✓ Remediation executed successfully for trigger: {trigger}{Colors.RESET}"
+                f"{Colors.GREEN}[OK] Remediation executed successfully for trigger: {trigger}{Colors.RESET}"
             )
         else:
             logger.error(
-                f"{Colors.RED}✗ Remediation failed for trigger: {trigger}{Colors.RESET}"
+                f"{Colors.RED}[FAIL] Remediation failed for trigger: {trigger}{Colors.RESET}"
             )
 
     except Exception as e:
         execution_log["error"] = str(e)
         execution_log["success"] = False
         logger.error(
-            f"{Colors.RED}✗ Error executing remediation for trigger {trigger}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Error executing remediation for trigger {trigger}: {str(e)}{Colors.RESET}"
         )
 
     return execution_log
@@ -407,12 +407,12 @@ def validate_safety_mode(trigger: str, remediation_mode: str) -> bool:
 
     if remediation_mode in allowed_modes:
         logger.info(
-            f"{Colors.GREEN}✓ Remediation mode '{remediation_mode}' is compatible with safety mode '{safety_mode}'{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Remediation mode '{remediation_mode}' is compatible with safety mode '{safety_mode}'{Colors.RESET}"
         )
         return True
     else:
         logger.error(
-            f"{Colors.RED}✗ Remediation mode '{remediation_mode}' is NOT compatible with safety mode '{safety_mode}'{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Remediation mode '{remediation_mode}' is NOT compatible with safety mode '{safety_mode}'{Colors.RESET}"
         )
         logger.error(
             f"{Colors.RED}  Allowed modes for '{safety_mode}': {allowed_modes}{Colors.RESET}"

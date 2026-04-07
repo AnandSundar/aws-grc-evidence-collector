@@ -124,7 +124,7 @@ def disable_iam_access_key(
 
             remediation_log["success"] = True
             logger.info(
-                f"{Colors.GREEN}✓ Successfully disabled access key: {access_key_id} for user: {user_name}{Colors.RESET}"
+                f"{Colors.GREEN}[OK] Successfully disabled access key: {access_key_id} for user: {user_name}{Colors.RESET}"
             )
 
     except ClientError as e:
@@ -132,12 +132,12 @@ def disable_iam_access_key(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to disable access key {access_key_id} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to disable access key {access_key_id} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error disabling access key {access_key_id} for user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error disabling access key {access_key_id} for user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -241,7 +241,7 @@ def enforce_mfa_for_user(user_name: str, region: str = "us-east-1") -> Dict[str,
         remediation_log["after_state"] = remediation_log["before_state"]
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Sent notification about missing MFA for user: {user_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Sent notification about missing MFA for user: {user_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -249,12 +249,12 @@ def enforce_mfa_for_user(user_name: str, region: str = "us-east-1") -> Dict[str,
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to check MFA status for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to check MFA status for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error checking MFA status for user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error checking MFA status for user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     return remediation_log
@@ -355,7 +355,7 @@ def delete_iam_user_inline_policy(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully deleted inline policy: {policy_name} for user: {user_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully deleted inline policy: {policy_name} for user: {user_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -363,12 +363,12 @@ def delete_iam_user_inline_policy(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to delete inline policy {policy_name} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to delete inline policy {policy_name} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error deleting inline policy {policy_name} for user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error deleting inline policy {policy_name} for user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -471,7 +471,7 @@ def detach_iam_user_policy(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully detached policy: {policy_arn} from user: {user_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully detached policy: {policy_arn} from user: {user_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -479,12 +479,12 @@ def detach_iam_user_policy(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to detach policy {policy_arn} from user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to detach policy {policy_arn} from user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error detaching policy {policy_arn} from user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error detaching policy {policy_arn} from user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -573,7 +573,7 @@ def rotate_iam_access_key(
                 f"Old access key {old_access_key_id} not found for user {user_name}"
             )
             logger.error(
-                f"{Colors.RED}✗ Old access key {old_access_key_id} not found for user: {user_name}{Colors.RESET}"
+                f"{Colors.RED}[FAIL] Old access key {old_access_key_id} not found for user: {user_name}{Colors.RESET}"
             )
             return remediation_log
 
@@ -607,12 +607,12 @@ def rotate_iam_access_key(
         # Note: In production, the new secret key should be stored securely
         # (e.g., in AWS Secrets Manager or Parameter Store)
         logger.warning(
-            f"{Colors.YELLOW}⚠ New access key created: {new_key_id}. Secret key should be stored securely!{Colors.RESET}"
+            f"{Colors.YELLOW}[WARN] New access key created: {new_key_id}. Secret key should be stored securely!{Colors.RESET}"
         )
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully rotated access key for user: {user_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully rotated access key for user: {user_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -620,12 +620,12 @@ def rotate_iam_access_key(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to rotate access key for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to rotate access key for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error rotating access key for user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error rotating access key for user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     return remediation_log
@@ -689,7 +689,7 @@ def delete_iam_access_key(
                 f"Access key {access_key_id} is still active (Status: {key_status}). Disable first."
             )
             logger.error(
-                f"{Colors.RED}✗ Access key {access_key_id} is still active. Cannot delete.{Colors.RESET}"
+                f"{Colors.RED}[FAIL] Access key {access_key_id} is still active. Cannot delete.{Colors.RESET}"
             )
             return remediation_log
 
@@ -725,7 +725,7 @@ def delete_iam_access_key(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully deleted access key: {access_key_id} for user: {user_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully deleted access key: {access_key_id} for user: {user_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -733,12 +733,12 @@ def delete_iam_access_key(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to delete access key {access_key_id} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to delete access key {access_key_id} for user {user_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error deleting access key {access_key_id} for user {user_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error deleting access key {access_key_id} for user {user_name}: {str(e)}{Colors.RESET}"
         )
 
     return remediation_log

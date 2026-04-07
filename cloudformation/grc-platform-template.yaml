@@ -740,6 +740,14 @@ Resources:
                   - 'iam:UpdateAccessKey'
                   - 'iam:ListAccessKeys'
                   - 'iam:GetUser'
+                  - 'iam:ListMFADevices'
+                  - 'iam:DeleteAccessKey'
+                  - 'iam:CreateAccessKey'
+                  - 'iam:DeleteUserPolicy'
+                  - 'iam:GetUserPolicy'
+                  - 'iam:DetachUserPolicy'
+                  - 'iam:ListAttachedUserPolicies'
+                  - 'iam:GetAccessKeyLastUsed'
                 Resource: !Sub "arn:aws:iam::${AWS::AccountId}:user/*"
               - Sid: RDSRemediation
                 Effect: Allow

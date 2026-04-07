@@ -117,7 +117,7 @@ def block_s3_public_access(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully blocked public access for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully blocked public access for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -125,12 +125,12 @@ def block_s3_public_access(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to block public access for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to block public access for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error blocking public access for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error blocking public access for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -248,7 +248,7 @@ def enable_s3_encryption(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully enabled {encryption_type} encryption for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully enabled {encryption_type} encryption for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -256,12 +256,12 @@ def enable_s3_encryption(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to enable encryption for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to enable encryption for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error enabling encryption for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error enabling encryption for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -334,7 +334,7 @@ def enable_s3_versioning(bucket_name: str, region: str = "us-east-1") -> Dict[st
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully enabled versioning for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully enabled versioning for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -342,12 +342,12 @@ def enable_s3_versioning(bucket_name: str, region: str = "us-east-1") -> Dict[st
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to enable versioning for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to enable versioning for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error enabling versioning for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error enabling versioning for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -434,7 +434,7 @@ def enable_s3_logging(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully enabled logging for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully enabled logging for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -442,12 +442,12 @@ def enable_s3_logging(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to enable logging for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to enable logging for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error enabling logging for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error enabling logging for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -524,7 +524,7 @@ def remove_s3_public_acl(bucket_name: str, region: str = "us-east-1") -> Dict[st
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully removed public ACL for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully removed public ACL for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -532,12 +532,12 @@ def remove_s3_public_acl(bucket_name: str, region: str = "us-east-1") -> Dict[st
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to remove public ACL for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to remove public ACL for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error removing public ACL for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error removing public ACL for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -640,7 +640,7 @@ def delete_s3_public_policy(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully deleted bucket policy for bucket: {bucket_name}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully deleted bucket policy for bucket: {bucket_name}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -648,12 +648,12 @@ def delete_s3_public_policy(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to delete bucket policy for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to delete bucket policy for bucket {bucket_name}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error deleting bucket policy for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error deleting bucket policy for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful

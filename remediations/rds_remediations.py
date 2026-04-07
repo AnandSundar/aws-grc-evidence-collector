@@ -125,12 +125,12 @@ def enable_rds_encryption(
         )
 
         remediation_log["snapshot_id"] = snapshot_id
-        logger.info(f"{Colors.GREEN}✓ Snapshot created: {snapshot_id}{Colors.RESET}")
+        logger.info(f"{Colors.GREEN}[OK] Snapshot created: {snapshot_id}{Colors.RESET}")
 
         # Note: The actual restore operation would be performed separately
         # This is a placeholder for the restore operation
         logger.info(
-            f"{Colors.YELLOW}⚠ Restore operation to be scheduled separately. Snapshot ID: {snapshot_id}{Colors.RESET}"
+            f"{Colors.YELLOW}[WARN] Restore operation to be scheduled separately. Snapshot ID: {snapshot_id}{Colors.RESET}"
         )
 
         remediation_log["after_state"] = {
@@ -142,7 +142,7 @@ def enable_rds_encryption(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully scheduled snapshot for encryption remediation: {db_instance_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully scheduled snapshot for encryption remediation: {db_instance_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -150,12 +150,12 @@ def enable_rds_encryption(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to schedule encryption for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to schedule encryption for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error scheduling encryption for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error scheduling encryption for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -258,7 +258,7 @@ def disable_rds_public_access(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully disabled public access for DB instance: {db_instance_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully disabled public access for DB instance: {db_instance_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -266,12 +266,12 @@ def disable_rds_public_access(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to disable public access for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to disable public access for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error disabling public access for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error disabling public access for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -374,7 +374,7 @@ def enable_rds_multi_az(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully enabled Multi-AZ for DB instance: {db_instance_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully enabled Multi-AZ for DB instance: {db_instance_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -382,12 +382,12 @@ def enable_rds_multi_az(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to enable Multi-AZ for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to enable Multi-AZ for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error enabling Multi-AZ for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error enabling Multi-AZ for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -488,7 +488,7 @@ def enable_rds_deletion_protection(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully enabled deletion protection for DB instance: {db_instance_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully enabled deletion protection for DB instance: {db_instance_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -496,12 +496,12 @@ def enable_rds_deletion_protection(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to enable deletion protection for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to enable deletion protection for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error enabling deletion protection for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error enabling deletion protection for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -605,7 +605,7 @@ def update_rds_ca_certificate(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully updated CA certificate for DB instance: {db_instance_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully updated CA certificate for DB instance: {db_instance_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -613,12 +613,12 @@ def update_rds_ca_certificate(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to update CA certificate for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to update CA certificate for DB instance {db_instance_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error updating CA certificate for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error updating CA certificate for DB instance {db_instance_identifier}: {str(e)}{Colors.RESET}"
         )
 
     return remediation_log
@@ -752,7 +752,7 @@ def revoke_rds_snapshot_public_access(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully revoked public access from snapshot: {db_snapshot_identifier}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully revoked public access from snapshot: {db_snapshot_identifier}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -760,12 +760,12 @@ def revoke_rds_snapshot_public_access(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to revoke public access from snapshot {db_snapshot_identifier}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to revoke public access from snapshot {db_snapshot_identifier}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error revoking public access from snapshot {db_snapshot_identifier}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error revoking public access from snapshot {db_snapshot_identifier}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful

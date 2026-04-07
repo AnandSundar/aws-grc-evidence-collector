@@ -110,12 +110,12 @@ For questions or concerns, please contact your security team."""
         )
 
         logger.info(
-            f"{Colors.GREEN}✓ Sent remediation notification for {resource_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Sent remediation notification for {resource_id}{Colors.RESET}"
         )
         return True
 
     except Exception as e:
         logger.error(
-            f"{Colors.RED}✗ Failed to send notification for {resource_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to send notification for {resource_id}: {str(e)}{Colors.RESET}"
         )
         return False

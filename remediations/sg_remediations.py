@@ -174,7 +174,7 @@ def revoke_open_ssh_rule(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully revoked open SSH rule from security group: {group_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully revoked open SSH rule from security group: {group_id}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -182,12 +182,12 @@ def revoke_open_ssh_rule(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to revoke SSH rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to revoke SSH rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error revoking SSH rule from security group {group_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error revoking SSH rule from security group {group_id}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -307,7 +307,7 @@ def revoke_open_rdp_rule(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully revoked open RDP rule from security group: {group_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully revoked open RDP rule from security group: {group_id}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -315,12 +315,12 @@ def revoke_open_rdp_rule(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to revoke RDP rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to revoke RDP rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error revoking RDP rule from security group {group_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error revoking RDP rule from security group {group_id}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -395,7 +395,7 @@ def revoke_open_database_rule(
                 f"Unsupported database port: {port}. Supported ports: {list(DATABASE_PORTS.keys())}"
             )
             logger.error(
-                f"{Colors.RED}✗ Unsupported database port: {port}{Colors.RESET}"
+                f"{Colors.RED}[FAIL] Unsupported database port: {port}{Colors.RESET}"
             )
             return remediation_log
 
@@ -465,7 +465,7 @@ def revoke_open_database_rule(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully revoked open {DATABASE_PORTS[port]} rule from security group: {group_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully revoked open {DATABASE_PORTS[port]} rule from security group: {group_id}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -473,12 +473,12 @@ def revoke_open_database_rule(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to revoke database rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to revoke database rule from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error revoking database rule from security group {group_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error revoking database rule from security group {group_id}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -606,7 +606,7 @@ def revoke_all_ingress_from_default_sg(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully revoked {rules_revoked} ingress rule(s) from security group: {group_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully revoked {rules_revoked} ingress rule(s) from security group: {group_id}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -614,12 +614,12 @@ def revoke_all_ingress_from_default_sg(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to revoke ingress rules from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to revoke ingress rules from security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error revoking ingress rules from security group {group_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error revoking ingress rules from security group {group_id}: {str(e)}{Colors.RESET}"
         )
 
     # Send notification if remediation was successful
@@ -731,7 +731,7 @@ def add_sg_description(
 
         remediation_log["success"] = True
         logger.info(
-            f"{Colors.GREEN}✓ Successfully added Description tag to security group: {group_id}{Colors.RESET}"
+            f"{Colors.GREEN}[OK] Successfully added Description tag to security group: {group_id}{Colors.RESET}"
         )
 
     except ClientError as e:
@@ -739,12 +739,12 @@ def add_sg_description(
         error_message = e.response["Error"]["Message"]
         remediation_log["error"] = f"{error_code}: {error_message}"
         logger.error(
-            f"{Colors.RED}✗ Failed to add Description tag to security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Failed to add Description tag to security group {group_id}: {error_code} - {error_message}{Colors.RESET}"
         )
     except Exception as e:
         remediation_log["error"] = str(e)
         logger.error(
-            f"{Colors.RED}✗ Unexpected error adding Description tag to security group {group_id}: {str(e)}{Colors.RESET}"
+            f"{Colors.RED}[FAIL] Unexpected error adding Description tag to security group {group_id}: {str(e)}{Colors.RESET}"
         )
 
     return remediation_log

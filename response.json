@@ -1,1 +1,0 @@
-{"statusCode": 500, "remediation_id": "f36f9e27-93d4-477a-bbe4-8cee77e63d60", "action_status": "FAILED", "error": "cannot access local variable 'remediation_log' where it is not associated with a value"}
