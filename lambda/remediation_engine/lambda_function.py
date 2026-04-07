@@ -201,7 +201,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             **event.get("parameters", {})
         )
 
-        logger.info(f"{colors.OKGREEN}✓ Remediation execution completed{colors.ENDC}")
+        logger.info(f"{colors.OKGREEN}[OK] Remediation execution completed{colors.ENDC}")
         logger.info(f"  Action: {result.get('action_taken', 'unknown')}")
         logger.info(f"  Status: {result.get('success', False)}")
         logger.info(f"  Result keys: {list(result.keys())}")
@@ -238,7 +238,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"{colors.FAIL}✗ Error executing remediation: {str(e)}{colors.ENDC}")
+        logger.error(f"{colors.FAIL}[FAIL] Error executing remediation: {str(e)}{colors.ENDC}")
 
         # Build failure remediation log
         remediation_log = {
