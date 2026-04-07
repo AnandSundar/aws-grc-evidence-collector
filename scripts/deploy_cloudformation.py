@@ -14,9 +14,12 @@ Version: 2.0
 """
 
 import argparse
+import glob
 import json
 import logging
 import os
+import re
+import subprocess
 import sys
 import time
 from datetime import datetime
@@ -66,22 +69,22 @@ def print_colored(message: str, color: str = Colors.RESET) -> None:
 
 def print_success(message: str) -> None:
     """Print a success message in green."""
-    print_colored(f"✓ {message}", Colors.GREEN)
+    print_colored(f"[OK] {message}", Colors.GREEN)
 
 
 def print_error(message: str) -> None:
     """Print an error message in red."""
-    print_colored(f"✗ {message}", Colors.RED)
+    print_colored(f"[X] {message}", Colors.RED)
 
 
 def print_warning(message: str) -> None:
     """Print a warning message in yellow."""
-    print_colored(f"⚠ {message}", Colors.YELLOW)
+    print_colored(f"[WARN] {message}", Colors.YELLOW)
 
 
 def print_info(message: str) -> None:
     """Print an info message in cyan."""
-    print_colored(f"ℹ {message}", Colors.CYAN)
+    print_colored(f"[INFO] {message}", Colors.CYAN)
 
 
 def print_header(message: str) -> None:
@@ -307,18 +310,23 @@ class CloudFormationDeployer:
         # Upload template to S3 and return URL
         return self._upload_template_to_s3()
 
-    def _stream_stack_events(self, stack_name: str) -> None:
+    def _stream_stack_events(self, stack_name: str) -> Dict[str, Any]:
         """
         Stream CloudFormation stack events in real-time.
 
         Args:
             stack_name: Name of the stack to monitor
+
+        Returns:
+            Dictionary with event statistics including failure count
         """
         print_info("Streaming stack events...")
         print()
 
         seen_events = set()
-        last_timestamp = None
+        failure_count = 0
+        rollback_count = 0
+        failed_resources = []
 
         while True:
             try:
@@ -345,15 +353,21 @@ class CloudFormationDeployer:
                         resource_status = event["ResourceStatus"]
 
                         # Color code based on status
-                        if "FAILED" in resource_status or "ERROR" in resource_status:
+                        if "FAILED" in resource_status:
                             color = Colors.RED
-                            symbol = "✗"
+                            symbol = "[X]"
+                            failure_count += 1
+                            failed_resources.append(f"{logical_id} ({resource_type})")
+                        elif "ROLLBACK" in resource_status:
+                            color = Colors.RED
+                            symbol = "[ROLLBACK]"
+                            rollback_count += 1
                         elif "COMPLETE" in resource_status:
                             color = Colors.GREEN
-                            symbol = "✓"
+                            symbol = "[OK]"
                         elif "IN_PROGRESS" in resource_status:
                             color = Colors.YELLOW
-                            symbol = "⟳"
+                            symbol = "[UPDATE]"
                         else:
                             color = Colors.CYAN
                             symbol = "•"
@@ -364,7 +378,6 @@ class CloudFormationDeployer:
                         )
 
                         seen_events.add(event_id)
-                        last_timestamp = timestamp
 
                 # Check if stack operation is complete
                 if stack_status.endswith("COMPLETE") or stack_status.endswith("FAILED"):
@@ -380,6 +393,12 @@ class CloudFormationDeployer:
                     time.sleep(2)
                     continue
                 raise
+
+        return {
+            "failure_count": failure_count,
+            "rollback_count": rollback_count,
+            "failed_resources": failed_resources
+        }
 
     def _print_stack_outputs(self, stack_name: str) -> None:
         """
@@ -491,6 +510,188 @@ class CloudFormationDeployer:
         )
         print()
 
+    def _build_remediation_package(self) -> Optional[str]:
+        """
+        Build the remediation package with all 25 functions.
+
+        Returns:
+            Path to the built package, or None if build failed
+        """
+        print_info("Building remediation package with 25 functions...")
+
+        try:
+            result = subprocess.run(
+                [sys.executable, "scripts/build_remediation_package.py"],
+                capture_output=True,
+                text=True,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+
+            if result.returncode == 0:
+                # Extract package path from output, stripping ANSI codes
+                import re
+                ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+
+                for line in result.stdout.split('\n'):
+                    # Strip ANSI codes
+                    clean_line = ansi_escape.sub('', line)
+                    if 'Package created:' in clean_line:
+                        package_path = clean_line.split('Package created: ')[1].strip()
+                        print_success(f"Package built: {package_path}")
+                        return package_path
+                print_error("Could not find package path in build output")
+                return None
+            else:
+                print_error("Package build failed")
+                print(result.stdout)
+                print(result.stderr)
+                return None
+        except Exception as e:
+            print_error(f"Failed to build package: {e}")
+            return None
+
+    def _upload_remediation_package(self, package_path: str) -> Optional[Tuple[str, str]]:
+        """
+        Upload remediation package to existing S3 bucket.
+
+        Args:
+            package_path: Path to the remediation package zip file
+
+        Returns:
+            Tuple of (bucket_name, s3_key) or None if upload failed
+        """
+        print_info("Uploading remediation package to S3...")
+
+        try:
+            # Find an existing S3 bucket in the account
+            response = self.s3_client.list_buckets()
+
+            # Look for evidence bucket first
+            bucket_name = None
+            for bucket in response['Buckets']:
+                if 'evidence' in bucket['Name'].lower() and 'grc' in bucket['Name'].lower():
+                    bucket_name = bucket['Name']
+                    break
+
+            # If no evidence bucket, use first available bucket
+            if not bucket_name and response['Buckets']:
+                bucket_name = response['Buckets'][0]['Name']
+
+            if not bucket_name:
+                print_error("No S3 buckets found in account")
+                return None
+
+            # Add timestamp to S3 key to force CloudFormation updates
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            s3_key = f"remediation-engine-package-{timestamp}.zip"
+
+            # Upload package
+            self.s3_client.upload_file(package_path, bucket_name, s3_key)
+            print_success(f"Package uploaded to: s3://{bucket_name}/{s3_key}")
+            return bucket_name, s3_key
+
+        except Exception as e:
+            print_error(f"Failed to upload package: {e}")
+            return None
+
+    def _update_template_with_package(self, bucket_name: str, s3_key: str) -> bool:
+        """
+        Update CloudFormation template to reference pre-uploaded package.
+
+        Args:
+            bucket_name: S3 bucket name containing the package
+            s3_key: S3 key for the package
+
+        Returns:
+            True if update succeeded, False otherwise
+        """
+        print_info("Updating CloudFormation template...")
+
+        try:
+            # Read template
+            with open(self.TEMPLATE_PATH, 'r') as f:
+                template = f.read()
+
+            # Update S3Bucket - replace various patterns
+            template = re.sub(
+                r'S3Bucket: !Ref EvidenceBucket',
+                f'S3Bucket: {bucket_name}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Bucket: grc-evidence-platform-evidence',
+                f'S3Bucket: {bucket_name}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Bucket: "grc-evidence-platform-evidence"',
+                f'S3Bucket: {bucket_name}',
+                template
+            )
+
+            # Update S3Key to use our specific key
+            # Handle various formats: with/without quotes, with/without Sub
+            template = re.sub(
+                r'S3Key: !Sub "\$\{AWS::StackName\}/remediation-engine-package\.zip"',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Key: "remediation-engine-package-\d{8}-\d{6}\.zip"',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Key: "remediation-engine-package\.zip"',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            # Handle unquoted version (current format in template)
+            template = re.sub(
+                r'S3Key: remediation-engine-package-\d{8}-\d{6}\.zip',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Key: remediation-engine-package\.zip',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            # Update handler name if needed
+            template = re.sub(
+                r'Handler: index\.lambda_handler',
+                'Handler: lambda_function.lambda_handler',
+                template
+            )
+
+            # Reset description to original (remove any old timestamps)
+            template = re.sub(
+                r'Description: Auto-remediates security violations with 24\+ comprehensive remediation functions(?:\s*-\s*v\d{8}-\d{6})*',
+                'Description: Auto-remediates security violations with 24+ comprehensive remediation functions',
+                template
+            )
+
+            # Write updated template
+            with open(self.TEMPLATE_PATH, 'w') as f:
+                f.write(template)
+
+            print_success(f"Template updated with S3 package reference")
+            print_info(f"  S3 Bucket: {bucket_name}")
+            print_info(f"  S3 Key: {s3_key}")
+
+            return True
+
+        except Exception as e:
+            print_error(f"Failed to update template: {e}")
+            return False
+
     def deploy_stack(
         self, config_type: str, alert_email: str, environment: str
     ) -> bool:
@@ -508,6 +709,32 @@ class CloudFormationDeployer:
         try:
             # Print cost estimate
             self._print_cost_estimate(config_type)
+
+            # Build and upload remediation package
+            if config_type in ["full_platform", "remediation_only"]:
+                print()
+                print_header("Preparing Remediation Package")
+
+                # Build package
+                package_path = self._build_remediation_package()
+                if not package_path:
+                    print_error("Failed to build remediation package")
+                    return False
+
+                # Upload package
+                upload_result = self._upload_remediation_package(package_path)
+                if not upload_result:
+                    print_error("Failed to upload remediation package")
+                    return False
+
+                bucket_name, s3_key = upload_result
+
+                # Update template
+                if not self._update_template_with_package(bucket_name, s3_key):
+                    print_error("Failed to update template with package reference")
+                    return False
+
+                print()
 
             # Confirm deployment
             print_colored("Ready to deploy stack?", Colors.BOLD + Colors.YELLOW)
@@ -551,8 +778,8 @@ class CloudFormationDeployer:
                 OnFailure="ROLLBACK",
             )
 
-            # Stream events
-            self._stream_stack_events(self.STACK_NAME)
+            # Stream events and capture statistics
+            event_stats = self._stream_stack_events(self.STACK_NAME)
 
             # Check final status
             stack = self.cf_client.describe_stacks(StackName=self.STACK_NAME)["Stacks"][
@@ -561,6 +788,21 @@ class CloudFormationDeployer:
             status = stack["StackStatus"]
 
             if status == "CREATE_COMPLETE":
+                # Report if there were any failures during the creation
+                if event_stats["failure_count"] > 0 or event_stats["rollback_count"] > 0:
+                    print_warning("Creation completed with issues:")
+                    if event_stats["failure_count"] > 0:
+                        print_warning(f"  {event_stats['failure_count']} resource creation(s) failed")
+                    if event_stats["rollback_count"] > 0:
+                        print_warning(f"  {event_stats['rollback_count']} rollback(s) occurred")
+                    if event_stats["failed_resources"]:
+                        print_warning("  Failed resources:")
+                        for resource in event_stats["failed_resources"]:
+                            print_warning(f"    - {resource}")
+                    print()
+                    print_info("CloudFormation eventually succeeded after retries.")
+                    print()
+
                 print_success(f"Stack {self.STACK_NAME} created successfully!")
                 print()
                 self._print_stack_outputs(self.STACK_NAME)
@@ -614,6 +856,31 @@ class CloudFormationDeployer:
 
             print_info(f"Updating stack: {self.STACK_NAME}")
 
+            # Build and upload remediation package for update
+            print()
+            print_header("Preparing Remediation Package Update")
+
+            # Build package
+            package_path = self._build_remediation_package()
+            if not package_path:
+                print_error("Failed to build remediation package")
+                return False
+
+            # Upload package
+            upload_result = self._upload_remediation_package(package_path)
+            if not upload_result:
+                print_error("Failed to upload remediation package")
+                return False
+
+            bucket_name, s3_key = upload_result
+
+            # Update template
+            if not self._update_template_with_package(bucket_name, s3_key):
+                print_error("Failed to update template with package reference")
+                return False
+
+            print()
+
             # Load template
             template_url = self._load_template()
 
@@ -641,15 +908,32 @@ class CloudFormationDeployer:
             ]
 
             # Update stack
-            self.cf_client.update_stack(
-                StackName=self.STACK_NAME,
-                TemplateURL=template_url,
-                Parameters=cf_parameters,
-                Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
-            )
+            try:
+                self.cf_client.update_stack(
+                    StackName=self.STACK_NAME,
+                    TemplateURL=template_url,
+                    Parameters=cf_parameters,
+                    Capabilities=["CAPABILITY_NAMED_IAM", "CAPABILITY_AUTO_EXPAND"],
+                )
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code", "")
+                error_message = e.response.get("Error", {}).get("Message", "")
 
-            # Stream events
-            self._stream_stack_events(self.STACK_NAME)
+                # Handle "No updates are to be performed" error
+                if error_code == "ValidationError" and "No updates are to be performed" in error_message:
+                    print_warning("No CloudFormation updates needed.")
+                    print_info("The template is already up to date.")
+                    print_info("Note: The remediation package was uploaded to S3, but CloudFormation didn't detect any changes.")
+                    print_info("This is normal if the Lambda function code is already current.")
+                    # Cleanup template bucket
+                    self._cleanup_template_bucket()
+                    return True
+                else:
+                    # Re-raise other ClientErrors
+                    raise
+
+            # Stream events and capture statistics
+            event_stats = self._stream_stack_events(self.STACK_NAME)
 
             # Check final status
             stack = self.cf_client.describe_stacks(StackName=self.STACK_NAME)["Stacks"][
@@ -658,6 +942,21 @@ class CloudFormationDeployer:
             status = stack["StackStatus"]
 
             if status == "UPDATE_COMPLETE":
+                # Report if there were any failures during the update
+                if event_stats["failure_count"] > 0 or event_stats["rollback_count"] > 0:
+                    print_warning("Update completed with issues:")
+                    if event_stats["failure_count"] > 0:
+                        print_warning(f"  {event_stats['failure_count']} resource update(s) failed")
+                    if event_stats["rollback_count"] > 0:
+                        print_warning(f"  {event_stats['rollback_count']} rollback(s) occurred")
+                    if event_stats["failed_resources"]:
+                        print_warning("  Failed resources:")
+                        for resource in event_stats["failed_resources"]:
+                            print_warning(f"    - {resource}")
+                    print()
+                    print_info("CloudFormation eventually succeeded after retries.")
+                    print()
+
                 print_success(f"Stack {self.STACK_NAME} updated successfully!")
                 print()
                 self._print_stack_outputs(self.STACK_NAME)
@@ -823,7 +1122,7 @@ class CloudFormationDeployer:
                 "3. Deploy: With Auto-Remediation only ($0.00/month)", Colors.WHITE
             )
             print_colored(
-                "4. Deploy: Full Platform — AI + Auto-Remediation (~$0.78/month) ⭐ RECOMMENDED",
+                "4. Deploy: Full Platform — AI + Auto-Remediation (~$0.78/month) [STAR] RECOMMENDED",
                 Colors.GREEN + Colors.BOLD,
             )
             print_colored("5. Update existing stack", Colors.YELLOW)

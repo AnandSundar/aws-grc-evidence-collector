@@ -364,6 +364,60 @@ Resources:
               Bool:
                 'aws:SecureTransport': false
 
+  # 6. Lambda Deployment Bucket - For Lambda deployment packages
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-deployment-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeploymentPackageCleanup
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30  # Keep old versions for 30 days
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-deployment-bucket"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: Lambda deployment packages
+
+  DeploymentBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DeploymentBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub "${DeploymentBucket.Arn}/*"
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub "${DeploymentBucket.Arn}/*"
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
   # ============================================================================
   # PART 3: DYNAMODB TABLES
   # ============================================================================
@@ -892,7 +946,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-evidence-processor-${Environment}"
       Description: Processes CloudTrail events and stores evidence
       Runtime: python3.11
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: !GetAtt EvidenceProcessorRole.Arn
       Timeout: 60
       MemorySize: 512
@@ -1073,9 +1127,9 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-remediation-engine-${Environment}"
-      Description: Auto-remediates security violations based on findings
+      Description: Auto-remediates security violations with 24+ comprehensive remediation functions
       Runtime: python3.11
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: !GetAtt RemediationEngineRole.Arn
       Timeout: 300
       MemorySize: 512
@@ -1088,188 +1142,8 @@ Resources:
           REMEDIATION_LOG_TABLE: !Ref RemediationLogTable
           ALERT_TOPIC_ARN: !If [HasAlertEmail, !Ref AlertTopic, ""]
       Code:
-        ZipFile: |
-          import json
-          import logging
-          import os
-          import boto3
-          import uuid
-          from datetime import datetime
-          from botocore.exceptions import ClientError
-          
-          logger = logging.getLogger(__name__)
-          logger.setLevel(logging.INFO)
-          
-          s3 = boto3.client("s3")
-          dynamodb = boto3.client("dynamodb")
-          sns = boto3.client("sns")
-          ec2 = boto3.client("ec2")
-          iam = boto3.client("iam")
-          rds = boto3.client("rds")
-          kms = boto3.client("kms")
-          
-          REMEDIATION_MODE = os.environ.get("REMEDIATION_MODE", "DRY_RUN")
-          EVIDENCE_BUCKET = os.environ.get("EVIDENCE_BUCKET")
-          REMEDIATION_LOG_TABLE = os.environ.get("REMEDIATION_LOG_TABLE")
-          ALERT_TOPIC_ARN = os.environ.get("ALERT_TOPIC_ARN")
-          DRY_RUN = REMEDIATION_MODE == "DRY_RUN"
-          
-          def block_s3_public_access(bucket_name: str) -> dict:
-              action_details = {"bucket_name": bucket_name, "public_access_block_configuration": {
-                  "BlockPublicAcls": True, "IgnorePublicAcls": True,
-                  "BlockPublicPolicy": True, "RestrictPublicBuckets": True}}
-              if DRY_RUN:
-                  logger.info(f"[DRY RUN] Would block public access on S3 bucket: {bucket_name}")
-                  return {"action": "block_s3_public_access", "status": "DRY_RUN", "details": action_details}
-              try:
-                  s3.put_public_access_block(Bucket=bucket_name,
-                  PublicAccessBlockConfiguration=action_details["public_access_block_configuration"])
-                  logger.info(f"Blocked public access on S3 bucket: {bucket_name}")
-                  return {"action": "block_s3_public_access", "status": "SUCCESS", "details": action_details}
-              except ClientError as e:
-                  logger.error(f"Failed to block public access on {bucket_name}: {e}")
-                  return {"action": "block_s3_public_access", "status": "FAILED", "details": action_details, "error": str(e)}
-          
-          def enforce_s3_bucket_encryption(bucket_name: str) -> dict:
-              action_details = {"bucket_name": bucket_name, "encryption_configuration": {
-                  "Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}}
-              if DRY_RUN:
-                  logger.info(f"[DRY RUN] Would enforce encryption on S3 bucket: {bucket_name}")
-                  return {"action": "enforce_s3_bucket_encryption", "status": "DRY_RUN", "details": action_details}
-              try:
-                  s3.put_bucket_encryption(Bucket=bucket_name,
-                  ServerSideEncryptionConfiguration=action_details["encryption_configuration"])
-                  logger.info(f"Enforced encryption on S3 bucket: {bucket_name}")
-                  return {"action": "enforce_s3_bucket_encryption", "status": "SUCCESS", "details": action_details}
-              except ClientError as e:
-                  logger.error(f"Failed to enforce encryption on {bucket_name}: {e}")
-                  return {"action": "enforce_s3_bucket_encryption", "status": "FAILED", "details": action_details, "error": str(e)}
-          
-          def disable_iam_access_key(user_name: str, access_key_id: str) -> dict:
-              action_details = {"user_name": user_name, "access_key_id": access_key_id}
-              if DRY_RUN:
-                  logger.info(f"[DRY RUN] Would disable access key {access_key_id} for user {user_name}")
-                  return {"action": "disable_iam_access_key", "status": "DRY_RUN", "details": action_details}
-              try:
-                  iam.update_access_key(UserName=user_name, AccessKeyId=access_key_id, Status="Inactive")
-                  logger.info(f"Disabled access key {access_key_id} for user {user_name}")
-                  return {"action": "disable_iam_access_key", "status": "SUCCESS", "details": action_details}
-              except ClientError as e:
-                  logger.error(f"Failed to disable access key {access_key_id}: {e}")
-                  return {"action": "disable_iam_access_key", "status": "FAILED", "details": action_details, "error": str(e)}
-          
-          def enable_kms_key_rotation(key_id: str) -> dict:
-              action_details = {"key_id": key_id}
-              if DRY_RUN:
-                  logger.info(f"[DRY RUN] Would enable rotation for KMS key: {key_id}")
-                  return {"action": "enable_kms_key_rotation", "status": "DRY_RUN", "details": action_details}
-              try:
-                  kms.enable_key_rotation(KeyId=key_id)
-                  logger.info(f"Enabled rotation for KMS key: {key_id}")
-                  return {"action": "enable_kms_key_rotation", "status": "SUCCESS", "details": action_details}
-              except ClientError as e:
-                  logger.error(f"Failed to enable rotation for KMS key {key_id}: {e}")
-                  return {"action": "enable_kms_key_rotation", "status": "FAILED", "details": action_details, "error": str(e)}
-          
-          def store_remediation_log(remediation_log: dict) -> None:
-              timestamp = datetime.fromisoformat(remediation_log["created_at"].replace("Z", "+00:00"))
-              s3_path = f"remediations/{timestamp.year}/{timestamp.month:02d}/{timestamp.day:02d}/{remediation_log['id']}.json"
-              try:
-                  s3.put_object(Bucket=EVIDENCE_BUCKET, Key=s3_path,
-                  Body=json.dumps(remediation_log, indent=2), ContentType="application/json",
-                  ServerSideEncryption="AES256")
-                  logger.info(f"Remediation log stored to S3: s3://{EVIDENCE_BUCKET}/{s3_path}")
-              except ClientError as e:
-                  logger.error(f"Failed to store remediation log to S3: {e}")
-              try:
-                  item = {"id": {"S": remediation_log["id"]},
-                  "remediation_type": {"S": remediation_log["remediation_type"]},
-                  "resource_id": {"S": remediation_log["resource_id"]},
-                  "resource_type": {"S": remediation_log["resource_type"]},
-                  "finding_id": {"S": remediation_log["finding_id"]},
-                  "finding_title": {"S": remediation_log["finding_title"]},
-                  "finding_priority": {"S": remediation_log["finding_priority"]},
-                  "action_taken": {"S": remediation_log["action_taken"]},
-                  "action_status": {"S": remediation_log["action_status"]},
-                  "action_timestamp": {"S": remediation_log["action_timestamp"]},
-                  "execution_mode": {"S": remediation_log["execution_mode"]},
-                  "performed_by": {"S": remediation_log["performed_by"]},
-                  "details": {"S": json.dumps(remediation_log["details"])},
-                  "evidence_path": {"S": remediation_log["evidence_path"]},
-                  "created_at": {"S": remediation_log["created_at"]}}
-                  dynamodb.put_item(TableName=REMEDIATION_LOG_TABLE, Item=item)
-                  logger.info(f"Remediation log stored to DynamoDB: {remediation_log['id']}")
-              except ClientError as e:
-                  logger.error(f"Failed to store remediation log to DynamoDB: {e}")
-          
-          def send_sns_notification(remediation_log: dict) -> None:
-              if not ALERT_TOPIC_ARN:
-                  return
-              subject = f"[{remediation_log['action_status']}] Remediation: {remediation_log['remediation_type']}"
-              message = f"""GRC Platform - Remediation Action Completed
-              Remediation Type: {remediation_log['remediation_type']}
-              Resource: {remediation_log['resource_type']} - {remediation_log['resource_id']}
-              Finding: {remediation_log['finding_title']} ({remediation_log['finding_priority']})
-              Action Taken: {remediation_log['action_taken']}
-              Status: {remediation_log['action_status']}
-              Execution Mode: {remediation_log['execution_mode']}
-              Details: {json.dumps(remediation_log['details'], indent=2)}
-              Finding ID: {remediation_log['finding_id']}
-              Evidence: {remediation_log['evidence_path']}
-              Timestamp: {remediation_log['action_timestamp']}"""
-              try:
-                  sns.publish(TopicArn=ALERT_TOPIC_ARN, Subject=subject, Message=message)
-                  logger.info(f"SNS notification sent for remediation: {remediation_log['id']}")
-              except ClientError as e:
-                  logger.error(f"Failed to send SNS notification: {e}")
-          
-          def lambda_handler(event, context):
-              logger.info(f"Remediation Engine invoked with event: {json.dumps(event)}")
-              remediation_id = str(uuid.uuid4())
-              now = datetime.utcnow()
-              remediation_type = event.get("remediation_type", "unknown")
-              resource_id = event.get("resource_id", "unknown")
-              resource_type = event.get("resource_type", "unknown")
-              finding_id = event.get("finding_id", "unknown")
-              finding_title = event.get("finding_title", "Unknown")
-              finding_priority = event.get("finding_priority", "MEDIUM")
-              
-              action_result = {"action": "unknown", "status": "FAILED", "details": {}}
-              
-              if remediation_type == "block_s3_public_access":
-                  action_result = block_s3_public_access(resource_id)
-              elif remediation_type == "enforce_s3_bucket_encryption":
-                  action_result = enforce_s3_bucket_encryption(resource_id)
-              elif remediation_type == "disable_iam_access_key":
-                  user_name = event.get("user_name", resource_id)
-                  action_result = disable_iam_access_key(user_name, resource_id)
-              elif remediation_type == "enable_kms_key_rotation":
-                  action_result = enable_kms_key_rotation(resource_id)
-              else:
-                  logger.warning(f"Unknown remediation type: {remediation_type}")
-              
-              remediation_log = {
-                  "id": remediation_id,
-                  "remediation_type": remediation_type,
-                  "resource_id": resource_id,
-                  "resource_type": resource_type,
-                  "finding_id": finding_id,
-                  "finding_title": finding_title,
-                  "finding_priority": finding_priority,
-                  "action_taken": action_result["action"],
-                  "action_status": action_result["status"],
-                  "action_timestamp": now.isoformat(),
-                  "execution_mode": REMEDIATION_MODE,
-                  "performed_by": "remediation-engine",
-                  "details": action_result.get("details", {}),
-                  "evidence_path": f"remediations/{now.year}/{now.month:02d}/{now.day:02d}/{remediation_id}.json",
-                  "created_at": now.isoformat(),
-              }
-              
-              store_remediation_log(remediation_log)
-              send_sns_notification(remediation_log)
-              
-              return {"statusCode": 200, "remediation_id": remediation_id, "action_status": action_result["status"]}
+        S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
+        S3Key: remediation-engine-package-20260406-191909.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-remediation-engine"
@@ -1283,7 +1157,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-scorecard-generator-${Environment}"
       Description: Generates daily compliance scorecards
       Runtime: python3.11
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: !GetAtt ScorecardGeneratorRole.Arn
       Timeout: 300
       MemorySize: 512
@@ -1460,7 +1334,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-aging-monitor-${Environment}"
       Description: Monitors evidence collection SLAs and alerts on stale evidence
       Runtime: python3.11
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: !GetAtt AgingMonitorRole.Arn
       Timeout: 300
       MemorySize: 512
@@ -1564,7 +1438,7 @@ Resources:
       FunctionName: !Sub "${AWS::StackName}-report-exporter-${Environment}"
       Description: Generates comprehensive audit reports
       Runtime: python3.11
-      Handler: index.lambda_handler
+      Handler: lambda_function.lambda_handler
       Role: !GetAtt ReportExporterRole.Arn
       Timeout: 900
       MemorySize: 1024
@@ -1814,6 +1688,314 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EventBridgeWeeklyRule.Arn
+
+  # ============================================================================
+  # PART 7.5: AUTOMATIC REMEDIATION TRIGGERS
+  # ============================================================================
+
+  # 24. Automatic Remediation for S3 Public Access Violations
+  RemediationRuleS3PublicRead:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-s3-public-read"
+      Description: Automatically remediate S3 buckets with public read access
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - s3-bucket-public-read-prohibited
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationS3PublicReadTarget
+          InputTransformer:
+            InputPathsMap:
+              bucket: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+              message: "$.detail.message"
+            InputTemplate: |
+              {
+                "remediation_type": "block_s3_public_access",
+                "resource_id": "<bucket>",
+                "trigger": "<rule>",
+                "resource_type": "s3_bucket",
+                "finding_id": "<rule>-<bucket>",
+                "finding_title": "S3 Bucket Public Read Access Detected",
+                "finding_priority": "CRITICAL",
+                "finding_description": "S3 bucket <bucket> has public read access - automatically blocking public access",
+                "parameters": {}
+              }
+
+  RemediationRuleS3PublicWrite:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-s3-public-write"
+      Description: Automatically remediate S3 buckets with public write access
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - s3-bucket-public-write-prohibited
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationS3PublicWriteTarget
+          InputTransformer:
+            InputPathsMap:
+              bucket: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "block_s3_public_access",
+                "resource_id": "<bucket>",
+                "trigger": "<rule>",
+                "resource_type": "s3_bucket",
+                "finding_id": "<rule>-<bucket>",
+                "finding_title": "S3 Bucket Public Write Access Detected",
+                "finding_priority": "CRITICAL",
+                "finding_description": "S3 bucket <bucket> has public write access - automatically blocking public access",
+                "parameters": {}
+              }
+
+  # 25. Automatic Remediation for S3 Encryption Violations
+  RemediationRuleS3Encryption:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-s3-encryption"
+      Description: Automatically enable encryption on unencrypted S3 buckets
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - s3-bucket-server-side-encryption-enabled
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationS3EncryptionTarget
+          InputTransformer:
+            InputPathsMap:
+              bucket: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "enable_s3_encryption",
+                "resource_id": "<bucket>",
+                "trigger": "<rule>",
+                "resource_type": "s3_bucket",
+                "finding_id": "<rule>-<bucket>",
+                "finding_title": "S3 Bucket Encryption Missing",
+                "finding_priority": "HIGH",
+                "finding_description": "S3 bucket <bucket> lacks encryption - automatically enabling AES256 encryption",
+                "parameters": {}
+              }
+
+  # 26. Automatic Remediation for Open SSH Rules
+  RemediationRuleOpenSSH:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-open-ssh"
+      Description: Automatically revoke SSH (port 22) rules open to 0.0.0.0/0
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - restricted-ssh
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationOpenSSHTarget
+          InputTransformer:
+            InputPathsMap:
+              sg: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "revoke_open_ssh_rule",
+                "resource_id": "<sg>",
+                "trigger": "<rule>",
+                "resource_type": "aws.ec2.securitygroup",
+                "finding_id": "<rule>-<sg>",
+                "finding_title": "Security Group Allows SSH from Internet",
+                "finding_priority": "CRITICAL",
+                "finding_description": "Security group <sg> allows SSH (port 22) from 0.0.0.0/0 - automatically revoking rule",
+                "parameters": {}
+              }
+
+  # 27. Automatic Remediation for Open RDP Rules
+  RemediationRuleOpenRDP:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-open-rdp"
+      Description: Automatically revoke RDP (port 3389) rules open to 0.0.0.0/0
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - restricted-rdp
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationOpenRDPTarget
+          InputTransformer:
+            InputPathsMap:
+              sg: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "revoke_open_rdp_rule",
+                "resource_id": "<sg>",
+                "trigger": "<rule>",
+                "resource_type": "aws.ec2.securitygroup",
+                "finding_id": "<rule>-<sg>",
+                "finding_title": "Security Group Allows RDP from Internet",
+                "finding_priority": "CRITICAL",
+                "finding_description": "Security group <sg> allows RDP (port 3389) from 0.0.0.0/0 - automatically revoking rule",
+                "parameters": {}
+              }
+
+  # 28. Automatic Remediation for RDS Public Access
+  RemediationRuleRDSPublicAccess:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-rds-public"
+      Description: Automatically disable public accessibility for RDS instances
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - rds-instance-public-access-check
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationRDSPublicTarget
+          InputTransformer:
+            InputPathsMap:
+              db: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "disable_rds_public_access",
+                "resource_id": "<db>",
+                "trigger": "<rule>",
+                "resource_type": "aws.rds.dbinstance",
+                "finding_id": "<rule>-<db>",
+                "finding_title": "RDS Instance Publicly Accessible",
+                "finding_priority": "CRITICAL",
+                "finding_description": "RDS instance <db> is publicly accessible - automatically disabling public access",
+                "parameters": {}
+              }
+
+  # 29. Automatic Remediation for IAM Access Key Rotation
+  RemediationRuleIAMKeyRotation:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-iam-keys"
+      Description: Automatically disable IAM access keys older than 90 days
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - iam-access-keys-rotated
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationIAMKeysTarget
+          InputTransformer:
+            InputPathsMap:
+              user: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "disable_iam_access_key",
+                "resource_id": "<user>",
+                "trigger": "<rule>",
+                "resource_type": "aws.iam.user",
+                "finding_id": "<rule>-<user>",
+                "finding_title": "IAM Access Keys Not Rotated",
+                "finding_priority": "HIGH",
+                "finding_description": "IAM user <user> has access keys older than 90 days - automatically disabling old keys",
+                "parameters": {}
+              }
+
+  RemediationRuleMissingMFA:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-remediate-missing-mfa"
+      Description: Automatically notify when IAM users don't have MFA enabled
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          configRuleName:
+            - !Sub "${AWS::StackName}-iam-user-mfa-enabled"
+          newEvaluationResult:
+            - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RemediationEngine.Arn
+          Id: RemediationMFATarget
+          InputTransformer:
+            InputPathsMap:
+              user: "$.detail.resourceId"
+              rule: "$.detail.configRuleName"
+            InputTemplate: |
+              {
+                "remediation_type": "enforce_mfa_for_user",
+                "resource_id": "<user>",
+                "trigger": "<rule>",
+                "resource_type": "aws.iam.user",
+                "finding_id": "<rule>-<user>",
+                "finding_title": "IAM User MFA Not Enabled",
+                "finding_priority": "HIGH",
+                "finding_description": "IAM user <user> does not have MFA enabled - sending notification to admin team",
+                "parameters": {}
+              }
+
+  # 30. Lambda Permissions for EventBridge Remediation Rules
+  RemediationEngineEventBridgePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RemediationEngine
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/*"
 
   # ============================================================================
   # PART 8: CLOUDTRAIL, CONFIG, CLOUDWATCH
@@ -2311,6 +2493,12 @@ Outputs:
     Value: !Ref ConfigBucket
     Export:
       Name: !Sub "${AWS::StackName}-ConfigBucketName"
+
+  DeploymentBucket:
+    Description: Name of the Lambda deployment packages S3 bucket
+    Value: !Ref DeploymentBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-DeploymentBucket"
 
   ConfigBucketArn:
     Description: ARN of the AWS Config S3 bucket

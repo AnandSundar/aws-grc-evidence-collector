@@ -201,7 +201,7 @@ def enforce_mfa_for_user(user_name: str, region: str = "us-east-1") -> Dict[str,
             return remediation_log
 
         # Send SNS notification to admin team
-        sns_topic_arn = os.getenv("REMEDIATION_SNS_TOPIC_ARN")
+        sns_topic_arn = os.getenv("ALERT_TOPIC_ARN")
         if sns_topic_arn:
             sns_client = boto3.client("sns", region_name=region)
             message = (
