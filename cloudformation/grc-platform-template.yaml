@@ -1143,7 +1143,7 @@ Resources:
           ALERT_TOPIC_ARN: !Ref AlertTopic
       Code:
         S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
-        S3Key: remediation-engine-package-20260406-205946.zip
+        S3Key: remediation-engine-package-20260407-091134.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-remediation-engine"
@@ -1963,8 +1963,8 @@ Resources:
         detail-type:
           - Config Rules Compliance Change
         detail:
-          configRuleName:
-            - !Sub "${AWS::StackName}-iam-user-mfa-enabled"
+          complianceType:
+            - MemberAlignment
           newEvaluationResult:
             - NON_COMPLIANT
       State: ENABLED
