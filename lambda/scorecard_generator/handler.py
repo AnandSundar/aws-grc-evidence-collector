@@ -430,7 +430,7 @@ def store_scorecard(
         # Add KMS encryption if key is available
         if kms_key:
             s3_params["ServerSideEncryption"] = "aws:kms"
-            s3_params["SSEKeyId"] = kms_key
+            s3_params["SSEKMSKeyId"] = kms_key
 
         s3_client.put_object(**s3_params)
         logger.info(

@@ -7,12 +7,25 @@
     ]
   },
   "allowedTools": [
-    "Bash(npm run *)",
+    "Bash(aws *)",
     "Bash(git *)",
     "Bash(python *)",
     "Bash(python3 *)",
     "Bash(cd *)",
+    "Bash(ls *)",
+    "Bash(grep *)",
+    "Bash(cat *)",
+    "Bash(head *)",
+    "Bash(tail *)",
+    "Bash(rm *)",
+    "Bash(sleep *)",
+    "Bash(powershell *)",
+    "Bash(heredoc)",
+    "Read",
     "Write",
-    "Edit"
+    "Edit",
+    "Glob",
+    "Grep",
+    "Agent(Explore)"
   ]
 }
