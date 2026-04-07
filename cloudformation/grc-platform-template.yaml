@@ -1143,7 +1143,7 @@ Resources:
           ALERT_TOPIC_ARN: !Ref AlertTopic
       Code:
         S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
-        S3Key: remediation-engine-package-20260407-091134.zip
+        S3Key: remediation-engine/remediation-engine-20260407-094516.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-remediation-engine"
