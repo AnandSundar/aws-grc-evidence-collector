@@ -12,6 +12,9 @@ from botocore.exceptions import ClientError
 from typing import Dict, Any, Optional
 from datetime import datetime
 
+# Import notification helper
+from .remediation_registry import send_remediation_notification
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -108,6 +111,20 @@ def enable_rds_encryption(
             logger.info(
                 f"{Colors.YELLOW}DB instance {db_instance_identifier} is already encrypted{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Enabled RDS encryption",
+            resource_id=resource_id,
+            resource_type="aws.rds.instance",
+            finding_title="RDS Instance Encryption Enabled",
+            finding_description="RDS instance {resource_id} was not encrypted - automatically enabled encryption",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-3.4.1', 'SOC2-CC6.7', 'HIPAA-164.312'],
+            region=region,
+        )
+
             return remediation_log
 
         # Create snapshot
@@ -216,6 +233,20 @@ def disable_rds_public_access(
             logger.info(
                 f"{Colors.YELLOW}DB instance {db_instance_identifier} is already not publicly accessible{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Disabled RDS public access",
+            resource_id=resource_id,
+            resource_type="aws.rds.instance",
+            finding_title="RDS Public Access Disabled",
+            finding_description="RDS instance {resource_id} was publicly accessible - automatically disabled public access",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-1.3.2', 'SOC2-CC6.6', 'CIS-2.3.2'],
+            region=region,
+        )
+
             return remediation_log
 
         # Disable public access
@@ -318,6 +349,20 @@ def enable_rds_multi_az(
             logger.info(
                 f"{Colors.YELLOW}DB instance {db_instance_identifier} is already Multi-AZ enabled{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Enabled RDS Multi-AZ",
+            resource_id=resource_id,
+            resource_type="aws.rds.instance",
+            finding_title="RDS Multi-AZ Enabled",
+            finding_description="RDS instance {resource_id} was not Multi-AZ - automatically enabled Multi-AZ deployment",
+            finding_priority="HIGH",
+            compliance_frameworks=['SOC2-A1.2'],
+            region=region,
+        )
+
             return remediation_log
 
         # Enable Multi-AZ
@@ -420,6 +465,20 @@ def enable_rds_deletion_protection(
             logger.info(
                 f"{Colors.YELLOW}DB instance {db_instance_identifier} already has deletion protection enabled{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Enabled RDS deletion protection",
+            resource_id=resource_id,
+            resource_type="aws.rds.instance",
+            finding_title="RDS Deletion Protection Enabled",
+            finding_description="RDS instance {resource_id} did not have deletion protection - automatically enabled",
+            finding_priority="MEDIUM",
+            compliance_frameworks=['SOC2-CC7.3'],
+            region=region,
+        )
+
             return remediation_log
 
         # Enable deletion protection
@@ -649,6 +708,20 @@ def revoke_rds_snapshot_public_access(
                 logger.info(
                     f"{Colors.YELLOW}Snapshot {db_snapshot_identifier} is not in a state that allows attribute modification{Colors.RESET}"
                 )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Revoked RDS snapshot public access",
+            resource_id=resource_id,
+            resource_type="aws.rds.instance",
+            finding_title="RDS Snapshot Public Access Revoked",
+            finding_description="RDS snapshot {resource_id} was public - automatically revoked public access",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-3.3', 'SOC2-CC6.6'],
+            region=region,
+        )
+
                 return remediation_log
             else:
                 raise

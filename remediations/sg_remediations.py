@@ -12,6 +12,9 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 import ipaddress
 
+# Import notification helper
+from .remediation_registry import send_remediation_notification
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -146,6 +149,20 @@ def revoke_open_ssh_rule(
             logger.info(
                 f"{Colors.YELLOW}No open SSH rule found in security group: {group_id}{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Revoked SSH access rule",
+            resource_id=resource_id,
+            resource_type="aws.ec2.security-group",
+            finding_title="Security Group SSH Access Revoked",
+            finding_description="Security group {resource_id} had SSH open to 0.0.0.0/0 - automatically revoked",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-1.3.1', 'CIS-5.2', 'SOC2-CC6.6'],
+            region=region,
+        )
+
             return remediation_log
 
         # Revoke the SSH rule
@@ -266,6 +283,20 @@ def revoke_open_rdp_rule(
             logger.info(
                 f"{Colors.YELLOW}No open RDP rule found in security group: {group_id}{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Revoked RDP access rule",
+            resource_id=resource_id,
+            resource_type="aws.ec2.security-group",
+            finding_title="Security Group RDP Access Revoked",
+            finding_description="Security group {resource_id} had RDP open to 0.0.0.0/0 - automatically revoked",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-1.3.1', 'CIS-5.3'],
+            region=region,
+        )
+
             return remediation_log
 
         # Revoke the RDP rule
@@ -368,6 +399,20 @@ def revoke_open_database_rule(
             logger.error(
                 f"{Colors.RED}✗ Unsupported database port: {port}{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Revoked database port access",
+            resource_id=resource_id,
+            resource_type="aws.ec2.security-group",
+            finding_title="Security Group Database Access Revoked",
+            finding_description="Security group {resource_id} had database ports open - automatically revoked",
+            finding_priority="CRITICAL",
+            compliance_frameworks=['PCI-DSS-1.3.2', 'SOC2-CC6.6'],
+            region=region,
+        )
+
             return remediation_log
 
         # Create EC2 client
@@ -530,6 +575,20 @@ def revoke_all_ingress_from_default_sg(
             logger.info(
                 f"{Colors.YELLOW}No ingress rules found in security group: {group_id}{Colors.RESET}"
             )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Revoked all ingress from default security group",
+            resource_id=resource_id,
+            resource_type="aws.ec2.security-group",
+            finding_title="Default Security Group Rules Revoked",
+            finding_description="Default security group {resource_id} had ingress rules - automatically revoked all rules",
+            finding_priority="HIGH",
+            compliance_frameworks=['CIS-5.4', 'PCI-DSS-1.3.1'],
+            region=region,
+        )
+
             return remediation_log
 
         # Revoke all ingress rules

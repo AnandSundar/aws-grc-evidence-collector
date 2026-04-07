@@ -10,7 +10,9 @@ import logging
 from botocore.exceptions import ClientError
 from typing import Dict, Any, Optional
 from datetime import datetime
-import os
+
+# Import notification helper
+from .remediation_registry import send_remediation_notification
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -131,6 +133,19 @@ def block_s3_public_access(
             f"{Colors.RED}✗ Unexpected error blocking public access for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Blocked all public access",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Public Access Blocked",
+            finding_description=f"S3 bucket {bucket_name} had public access - automatically blocked all public access flags",
+            finding_priority="CRITICAL",
+            compliance_frameworks=["PCI-DSS-1.3.2", "SOC2-CC6.6", "CIS-2.1.1"],
+            region=region,
+        )
+
     return remediation_log
 
 
@@ -249,6 +264,19 @@ def enable_s3_encryption(
             f"{Colors.RED}✗ Unexpected error enabling encryption for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken=f"Enabled {encryption_type} encryption",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Encryption Enabled",
+            finding_description=f"S3 bucket {bucket_name} was not encrypted - automatically enabled {encryption_type} encryption",
+            finding_priority="HIGH",
+            compliance_frameworks=["PCI-DSS-3.4", "SOC2-CC6.7"],
+            region=region,
+        )
+
     return remediation_log
 
 
@@ -320,6 +348,19 @@ def enable_s3_versioning(bucket_name: str, region: str = "us-east-1") -> Dict[st
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error enabling versioning for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Enabled S3 versioning",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Versioning Enabled",
+            finding_description=f"S3 bucket {bucket_name} did not have versioning - automatically enabled versioning",
+            finding_priority="MEDIUM",
+            compliance_frameworks=["SOC2-A1.3", "PCI-DSS-12.3.4"],
+            region=region,
         )
 
     return remediation_log
@@ -409,6 +450,19 @@ def enable_s3_logging(
             f"{Colors.RED}✗ Unexpected error enabling logging for bucket {bucket_name}: {str(e)}{Colors.RESET}"
         )
 
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Enabled S3 access logging",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Logging Enabled",
+            finding_description=f"S3 bucket {bucket_name} did not have access logging - automatically enabled logging to {target_bucket}",
+            finding_priority="MEDIUM",
+            compliance_frameworks=["PCI-DSS-10.2", "SOC2-CC6.8"],
+            region=region,
+        )
+
     return remediation_log
 
 
@@ -484,6 +538,19 @@ def remove_s3_public_acl(bucket_name: str, region: str = "us-east-1") -> Dict[st
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error removing public ACL for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Removed public ACL",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Public ACL Removed",
+            finding_description=f"S3 bucket {bucket_name} had public ACL - automatically removed public access",
+            finding_priority="CRITICAL",
+            compliance_frameworks=["PCI-DSS-1.3", "SOC2-CC6.6"],
+            region=region,
         )
 
     return remediation_log
@@ -587,6 +654,19 @@ def delete_s3_public_policy(
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error deleting bucket policy for bucket {bucket_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Deleted public bucket policy",
+            resource_id=bucket_name,
+            resource_type="aws.s3.bucket",
+            finding_title="S3 Bucket Public Policy Deleted",
+            finding_description=f"S3 bucket {bucket_name} had public bucket policy - automatically deleted policy",
+            finding_priority="CRITICAL",
+            compliance_frameworks=["PCI-DSS-1.3", "SOC2-CC6.6"],
+            region=region,
         )
 
     return remediation_log
