@@ -5,5 +5,12 @@
       "Bash(python scripts/verify_nemotron_migration.py)",
       "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('cloudformation/grc-platform-template.yaml'\\)\\)\")"
     ]
-  }
+  },
+  "allowedTools": [
+    "Bash(npm run *)",
+    "Bash(git *)",
+    "Bash(python *)",
+    "Write",
+    "Edit"
+  ]
 }

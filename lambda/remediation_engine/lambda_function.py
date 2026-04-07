@@ -160,6 +160,9 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         Response with remediation ID and status
     """
     logger.info(f"Remediation Engine invoked with event: {json.dumps(event)}")
+    logger.info(f"REMEDIATION_MODE env var: {REMEDIATION_MODE}")
+    logger.info(f"EVIDENCE_BUCKET env var: {EVIDENCE_BUCKET}")
+    logger.info(f"ALERT_TOPIC_ARN env var: {ALERT_TOPIC_ARN}")
 
     # Generate remediation ID
     remediation_id = str(uuid.uuid4())
@@ -188,6 +191,7 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     # Execute remediation using registry
     try:
         logger.info(f"{colors.OKBLUE}Executing remediation via registry...{colors.ENDC}")
+        logger.info(f"  Trigger: {trigger}, Resource: {resource_id}")
 
         result = execute_remediation(
             trigger=trigger,
@@ -200,9 +204,10 @@ def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
         logger.info(f"{colors.OKGREEN}✓ Remediation execution completed{colors.ENDC}")
         logger.info(f"  Action: {result.get('action_taken', 'unknown')}")
         logger.info(f"  Status: {result.get('success', False)}")
+        logger.info(f"  Result keys: {list(result.keys())}")
 
         # Build remediation log
-        remedation_log = {
+        remediation_log = {
             "id": remediation_id,
             "remediation_type": remediation_type,
             "resource_id": resource_id,

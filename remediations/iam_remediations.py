@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 # Import notification helper
-from .remediation_registry import send_remediation_notification
+from .notifications import send_remediation_notification
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -106,41 +106,26 @@ def disable_iam_access_key(
             logger.info(
                 f"{Colors.YELLOW}Access key {access_key_id} is already disabled for user: {user_name}{Colors.RESET}"
             )
+        else:
+            # Disable the access key
+            logger.info(
+                f"{Colors.YELLOW}Disabling access key: {access_key_id} for user: {user_name}{Colors.RESET}"
+            )
+            iam_client.update_access_key(
+                UserName=user_name, AccessKeyId=access_key_id, Status="Inactive"
+            )
 
-    # Send notification if remediation was successful
-    if remediation_log["success"]:
-        send_remediation_notification(
-            action_taken="Disabled IAM access key",
-            resource_id=resource_id,
-            resource_type="aws.iam.user",
-            finding_title="IAM Access Key Disabled",
-            finding_description="IAM user {resource_id} had access keys >90 days old - automatically disabled",
-            finding_priority="HIGH",
-            compliance_frameworks=['PCI-DSS-8.2.4', 'CIS-1.14', 'SOC2-CC6.1'],
-            region=region,
-        )
+            # Get after state
+            after_state = iam_client.get_access_key(
+                UserName=user_name, AccessKeyId=access_key_id
+            )
+            remediation_log["after_state"] = after_state.get("AccessKey", {})
+            remediation_log["new_status"] = "Inactive"
 
-            return remediation_log
-
-        # Disable the access key
-        logger.info(
-            f"{Colors.YELLOW}Disabling access key: {access_key_id} for user: {user_name}{Colors.RESET}"
-        )
-        iam_client.update_access_key(
-            UserName=user_name, AccessKeyId=access_key_id, Status="Inactive"
-        )
-
-        # Get after state
-        after_state = iam_client.get_access_key(
-            UserName=user_name, AccessKeyId=access_key_id
-        )
-        remediation_log["after_state"] = after_state.get("AccessKey", {})
-        remediation_log["new_status"] = "Inactive"
-
-        remediation_log["success"] = True
-        logger.info(
-            f"{Colors.GREEN}✓ Successfully disabled access key: {access_key_id} for user: {user_name}{Colors.RESET}"
-        )
+            remediation_log["success"] = True
+            logger.info(
+                f"{Colors.GREEN}✓ Successfully disabled access key: {access_key_id} for user: {user_name}{Colors.RESET}"
+            )
 
     except ClientError as e:
         error_code = e.response["Error"]["Code"]
@@ -153,6 +138,19 @@ def disable_iam_access_key(
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error disabling access key {access_key_id} for user {user_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Disabled IAM access key",
+            resource_id=remediation_log["resource_id"],
+            resource_type="aws.iam.user",
+            finding_title="IAM Access Key Disabled",
+            finding_description=f"IAM user {user_name} had access keys >90 days old - automatically disabled",
+            finding_priority="HIGH",
+            compliance_frameworks=['PCI-DSS-8.2.4', 'CIS-1.14', 'SOC2-CC6.1'],
+            region=region,
         )
 
     return remediation_log
@@ -326,20 +324,6 @@ def delete_iam_user_inline_policy(
                 logger.info(
                     f"{Colors.YELLOW}Inline policy {policy_name} does not exist for user: {user_name}{Colors.RESET}"
                 )
-
-    # Send notification if remediation was successful
-    if remediation_log["success"]:
-        send_remediation_notification(
-            action_taken="Deleted IAM user inline policy",
-            resource_id=resource_id,
-            resource_type="aws.iam.user",
-            finding_title="IAM User Inline Policy Deleted",
-            finding_description="IAM user {resource_id} had inline policy - automatically deleted",
-            finding_priority="MEDIUM",
-            compliance_frameworks=['CIS-1.16', 'SOC2-CC6.3', 'NIST-AC-6'],
-            region=region,
-        )
-
                 return remediation_log
             else:
                 raise
@@ -385,6 +369,19 @@ def delete_iam_user_inline_policy(
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error deleting inline policy {policy_name} for user {user_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Deleted IAM user inline policy",
+            resource_id=remediation_log["resource_id"],
+            resource_type="aws.iam.user",
+            finding_title="IAM User Inline Policy Deleted",
+            finding_description=f"IAM user {user_name} had inline policy - automatically deleted",
+            finding_priority="MEDIUM",
+            compliance_frameworks=['CIS-1.16', 'SOC2-CC6.3', 'NIST-AC-6'],
+            region=region,
         )
 
     return remediation_log
@@ -451,20 +448,6 @@ def detach_iam_user_policy(
             logger.info(
                 f"{Colors.YELLOW}Policy {policy_arn} is not attached to user: {user_name}{Colors.RESET}"
             )
-
-    # Send notification if remediation was successful
-    if remediation_log["success"]:
-        send_remediation_notification(
-            action_taken="Detached IAM user policy",
-            resource_id=resource_id,
-            resource_type="aws.iam.user",
-            finding_title="IAM User Policy Detached",
-            finding_description="IAM user {resource_id} had policies - automatically detached",
-            finding_priority="MEDIUM",
-            compliance_frameworks=['CIS-1.16', 'SOC2-CC6.3'],
-            region=region,
-        )
-
             return remediation_log
 
         # Detach the policy
@@ -502,6 +485,19 @@ def detach_iam_user_policy(
         remediation_log["error"] = str(e)
         logger.error(
             f"{Colors.RED}✗ Unexpected error detaching policy {policy_arn} from user {user_name}: {str(e)}{Colors.RESET}"
+        )
+
+    # Send notification if remediation was successful
+    if remediation_log["success"]:
+        send_remediation_notification(
+            action_taken="Detached IAM user policy",
+            resource_id=remediation_log["resource_id"],
+            resource_type="aws.iam.user",
+            finding_title="IAM User Policy Detached",
+            finding_description=f"IAM user {user_name} had policies - automatically detached",
+            finding_priority="MEDIUM",
+            compliance_frameworks=['CIS-1.16', 'SOC2-CC6.3'],
+            region=region,
         )
 
     return remediation_log

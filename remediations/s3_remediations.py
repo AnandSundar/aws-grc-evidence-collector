@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 
 # Import notification helper
-from .remediation_registry import send_remediation_notification
+from .notifications import send_remediation_notification
 
 # Configure logging
 logger = logging.getLogger(__name__)

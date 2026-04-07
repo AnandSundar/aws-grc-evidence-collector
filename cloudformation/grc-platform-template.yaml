@@ -1127,7 +1127,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${AWS::StackName}-remediation-engine-${Environment}"
-      Description: Auto-remediates security violations with 24+ comprehensive remediation functions
+      Description: Auto-remediates security violations with 25+ comprehensive remediation functions - Fixed
       Runtime: python3.11
       Handler: lambda_function.lambda_handler
       Role: !GetAtt RemediationEngineRole.Arn
@@ -1143,7 +1143,7 @@ Resources:
           ALERT_TOPIC_ARN: !Ref AlertTopic
       Code:
         S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
-        S3Key: remediation-engine/remediation-engine-20260407-094516.zip
+        S3Key: grc-evidence-platform-deployment-348342704892-us-east-1/remediation-engine/remediation-engine-20260407-123837.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-remediation-engine"
