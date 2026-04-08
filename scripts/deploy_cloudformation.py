@@ -692,6 +692,158 @@ class CloudFormationDeployer:
             print_error(f"Failed to update template: {e}")
             return False
 
+    def _build_scorecard_package(self) -> Optional[str]:
+        """
+        Build the scorecard generator Lambda package.
+
+        Returns:
+            Path to the built package, or None if build failed
+        """
+        print_info("Building scorecard generator package...")
+
+        try:
+            result = subprocess.run(
+                [sys.executable, "scripts/build_scorecard_package.py"],
+                capture_output=True,
+                text=True,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+
+            if result.returncode == 0:
+                # Extract package path from output, stripping ANSI codes
+                import re
+                ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+
+                for line in result.stdout.split('\n'):
+                    # Strip ANSI codes
+                    clean_line = ansi_escape.sub('', line)
+                    if 'Package created:' in clean_line:
+                        package_path = clean_line.split('Package created: ')[1].strip()
+                        print_success(f"Package built: {package_path}")
+                        return package_path
+                print_error("Could not find package path in build output")
+                return None
+            else:
+                print_error("Package build failed")
+                print(result.stdout)
+                print(result.stderr)
+                return None
+        except Exception as e:
+            print_error(f"Failed to build package: {e}")
+            return None
+
+    def _upload_scorecard_package(self, package_path: str) -> Optional[Tuple[str, str]]:
+        """
+        Upload scorecard generator package to existing S3 bucket.
+
+        Args:
+            package_path: Path to the scorecard generator package zip file
+
+        Returns:
+            Tuple of (bucket_name, s3_key) or None if upload failed
+        """
+        print_info("Uploading scorecard generator package to S3...")
+
+        try:
+            # Find an existing S3 bucket in the account
+            response = self.s3_client.list_buckets()
+
+            # Look for evidence bucket first
+            bucket_name = None
+            for bucket in response['Buckets']:
+                if 'evidence' in bucket['Name'].lower() and 'grc' in bucket['Name'].lower():
+                    bucket_name = bucket['Name']
+                    break
+
+            # If no evidence bucket, use first available bucket
+            if not bucket_name and response['Buckets']:
+                bucket_name = response['Buckets'][0]['Name']
+
+            if not bucket_name:
+                print_error("No S3 buckets found in account")
+                return None
+
+            # Add timestamp to S3 key to force CloudFormation updates
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            s3_key = f"scorecard-generator-package-{timestamp}.zip"
+
+            # Upload package
+            self.s3_client.upload_file(package_path, bucket_name, s3_key)
+            print_success(f"Package uploaded to: s3://{bucket_name}/{s3_key}")
+            return bucket_name, s3_key
+
+        except Exception as e:
+            print_error(f"Failed to upload package: {e}")
+            return None
+
+    def _update_template_with_scorecard_package(self, bucket_name: str, s3_key: str) -> bool:
+        """
+        Update CloudFormation template to reference the scorecard generator package.
+
+        Args:
+            bucket_name: S3 bucket name containing the package
+            s3_key: S3 key for the package
+
+        Returns:
+            True if update succeeded, False otherwise
+        """
+        print_info("Updating CloudFormation template for scorecard generator...")
+
+        try:
+            # Read template
+            with open(self.TEMPLATE_PATH, 'r') as f:
+                template = f.read()
+
+            # Update S3Bucket and S3Key for ScorecardGenerator
+            # Handle various formats
+            template = re.sub(
+                r'S3Bucket: grc-evidence-platform-evidence',
+                f'S3Bucket: {bucket_name}',
+                template
+            )
+
+            # Look for ScorecardGenerator section and update its S3Key
+            # The pattern should match the scorecard generator's S3Key specifically
+            template = re.sub(
+                r'(ScorecardGenerator:.*?S3Key:\s*)[^\s]+',
+                rf'\g<1>{s3_key}',
+                template,
+                flags=re.DOTALL
+            )
+
+            # Also handle the case where the key might be on the next line or quoted
+            template = re.sub(
+                r'S3Key: scorecard-generator-package-\d{8}-\d{6}\.zip',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Key: "scorecard-generator-package-\d{8}-\d{6}\.zip"',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            template = re.sub(
+                r'S3Key: scorecard-generator-package\.zip',
+                f'S3Key: {s3_key}',
+                template
+            )
+
+            # Write updated template
+            with open(self.TEMPLATE_PATH, 'w') as f:
+                f.write(template)
+
+            print_success(f"Template updated with scorecard generator S3 package reference")
+            print_info(f"  S3 Bucket: {bucket_name}")
+            print_info(f"  S3 Key: {s3_key}")
+
+            return True
+
+        except Exception as e:
+            print_error(f"Failed to update template: {e}")
+            return False
+
     def deploy_stack(
         self, config_type: str, alert_email: str, environment: str
     ) -> bool:
@@ -735,6 +887,30 @@ class CloudFormationDeployer:
                     return False
 
                 print()
+
+            # Build and upload scorecard generator package (always needed)
+            print_header("Preparing Scorecard Generator Package")
+
+            # Build package
+            scorecard_package_path = self._build_scorecard_package()
+            if not scorecard_package_path:
+                print_error("Failed to build scorecard generator package")
+                return False
+
+            # Upload package
+            scorecard_upload_result = self._upload_scorecard_package(scorecard_package_path)
+            if not scorecard_upload_result:
+                print_error("Failed to upload scorecard generator package")
+                return False
+
+            scorecard_bucket_name, scorecard_s3_key = scorecard_upload_result
+
+            # Update template
+            if not self._update_template_with_scorecard_package(scorecard_bucket_name, scorecard_s3_key):
+                print_error("Failed to update template with scorecard package reference")
+                return False
+
+            print()
 
             # Confirm deployment
             print_colored("Ready to deploy stack?", Colors.BOLD + Colors.YELLOW)
@@ -877,6 +1053,30 @@ class CloudFormationDeployer:
             # Update template
             if not self._update_template_with_package(bucket_name, s3_key):
                 print_error("Failed to update template with package reference")
+                return False
+
+            print()
+
+            # Build and upload scorecard generator package for update
+            print_header("Preparing Scorecard Generator Package Update")
+
+            # Build package
+            scorecard_package_path = self._build_scorecard_package()
+            if not scorecard_package_path:
+                print_error("Failed to build scorecard generator package")
+                return False
+
+            # Upload package
+            scorecard_upload_result = self._upload_scorecard_package(scorecard_package_path)
+            if not scorecard_upload_result:
+                print_error("Failed to upload scorecard generator package")
+                return False
+
+            scorecard_bucket_name, scorecard_s3_key = scorecard_upload_result
+
+            # Update template
+            if not self._update_template_with_scorecard_package(scorecard_bucket_name, scorecard_s3_key):
+                print_error("Failed to update template with scorecard package reference")
                 return False
 
             print()

@@ -668,9 +668,6 @@ Resources:
                 Effect: Allow
                 Action: 'bedrock:InvokeModel'
                 Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/nvidia.nemotron-nano-12b-v2"
-                Condition:
-                  StringEquals:
-                    'aws:PrincipalTag/Environment': !Ref Environment
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-evidence-processor-role"
@@ -798,12 +795,13 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: DynamoDBRead
+              - Sid: DynamoDBReadWrite
                 Effect: Allow
                 Action:
                   - 'dynamodb:GetItem'
                   - 'dynamodb:Query'
                   - 'dynamodb:Scan'
+                  - 'dynamodb:PutItem'
                 Resource:
                   - !Sub "${MetadataTable.Arn}"
                   - !Sub "${MetadataTable.Arn}/index/*"
@@ -832,6 +830,10 @@ Resources:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
                 Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+              - Sid: BedrockInvoke
+                Effect: Allow
+                Action: 'bedrock:InvokeModel'
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/nvidia.nemotron-nano-12b-v2"
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-scorecard-generator-role"
@@ -1185,150 +1187,13 @@ Resources:
           EVIDENCE_DYNAMODB_TABLE: !Ref MetadataTable
           SCORECARD_DYNAMODB_TABLE: !Ref ScorecardTable
           REMEDIATION_DYNAMODB_TABLE: !Ref RemediationLogTable
-          EVIDENCE_TIMESTAMP_GSI: "created_at-index"
+          EVIDENCE_TIMESTAMP_GSI: "TimestampIndex"
           ALERT_SNS_TOPIC: !Ref AlertTopic
+          USE_AI_EMAIL: "true"
+          AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Code:
-        ZipFile: |
-          import json
-          import logging
-          import os
-          import boto3
-          from datetime import datetime, timedelta
-          from dataclasses import dataclass, asdict
-
-          logger = logging.getLogger(__name__)
-          logger.setLevel(logging.INFO)
-          
-          dynamodb = boto3.client("dynamodb")
-          s3 = boto3.client("s3")
-          sns = boto3.client("sns")
-          
-          METADATA_TABLE = os.environ.get("METADATA_TABLE")
-          REMEDIATION_LOG_TABLE = os.environ.get("REMEDIATION_LOG_TABLE")
-          SCORECARD_TABLE = os.environ.get("SCORECARD_TABLE")
-          EVIDENCE_BUCKET = os.environ.get("EVIDENCE_BUCKET")
-          REPORTS_BUCKET = os.environ.get("REPORTS_BUCKET")
-          ALERT_TOPIC_ARN = os.environ.get("ALERT_TOPIC_ARN")
-          
-          @dataclass
-          class FrameworkScore:
-              framework_name: str
-              total_tested: int
-              passing: int
-              failing: int
-              score: float
-              trend: str = None
-          
-          @dataclass
-          class ComplianceScorecard:
-              scorecard_date: str
-              generated_at: str
-              account_id: str
-              overall_score: float
-              overall_trend: str
-              framework_scores: list
-              total_evidence_count: int
-              critical_count: int
-              high_count: int
-              medium_count: int
-              low_count: int
-              top_5_risks: list
-              evidence_by_collector: dict
-              remediation_summary: dict
-              sla_adherence: float
-          
-          def query_evidence_last_24h() -> list:
-              evidence_list = []
-              try:
-                  end_time = datetime.utcnow()
-                  start_time = end_time - timedelta(hours=24)
-                  paginator = dynamodb.get_paginator("scan")
-                  scan_params = {"TableName": METADATA_TABLE, "FilterExpression": "#ts BETWEEN :start_time AND :end_time",
-                  "ExpressionAttributeNames": {"#ts": "timestamp"},
-                  "ExpressionAttributeValues": {":start_time": {"S": start_time.isoformat()},
-                  ":end_time": {"S": end_time.isoformat()}}}
-                  for page in paginator.paginate(**scan_params):
-                      for item in page.get("Items", []):
-                          evidence = {}
-                          for key, value in item.items():
-                              if "S" in value: evidence[key] = value["S"]
-                              elif "N" in value: evidence[key] = float(value["N"])
-                              elif "L" in value: evidence[key] = [v["S"] for v in value["L"]]
-                              elif "M" in value: evidence[key] = json.loads(value["M"])
-                          evidence_list.append(evidence)
-                  logger.info(f"Queried {len(evidence_list)} evidence records from last 24h")
-              except Exception as e:
-                  logger.error(f"Failed to query evidence: {e}")
-              return evidence_list
-          
-          def calculate_framework_scores(evidence_list: list) -> list:
-              framework_data = {}
-              for evidence in evidence_list:
-                  compliance_tags = evidence.get("compliance_tags", [])
-                  if isinstance(compliance_tags, str):
-                      try: compliance_tags = json.loads(compliance_tags)
-                      except: compliance_tags = [compliance_tags]
-                  control_status = evidence.get("priority", "UNKNOWN")
-                  for framework in compliance_tags:
-                      if framework not in framework_data:
-                          framework_data[framework] = {"total_tested": 0, "passing": 0, "failing": 0}
-                      framework_data[framework]["total_tested"] += 1
-                      if control_status == "LOW": framework_data[framework]["passing"] += 1
-                      else: framework_data[framework]["failing"] += 1
-              framework_scores = []
-              for framework_name, data in framework_data.items():
-                  score = (data["passing"] / data["total_tested"] * 100) if data["total_tested"] > 0 else 0.0
-                  framework_scores.append(FrameworkScore(framework_name=framework_name,
-                  total_tested=data["total_tested"], passing=data["passing"],
-                  failing=data["failing"], score=round(score, 2)))
-              return framework_scores
-          
-          def lambda_handler(event, context):
-              logger.info("Scorecard Generator Lambda invoked")
-              evidence_list = query_evidence_last_24h()
-              framework_scores = calculate_framework_scores(evidence_list)
-              overall_score = sum(fs.score for fs in framework_scores) / len(framework_scores) if framework_scores else 0.0
-              priority_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-              for e in evidence_list:
-                  p = e.get("priority", "LOW")
-                  if p in priority_counts: priority_counts[p] += 1
-              collector_counts = {}
-              for e in evidence_list:
-                  c = e.get("event_type", "unknown")
-                  collector_counts[c] = collector_counts.get(c, 0) + 1
-              scorecard = ComplianceScorecard(
-                  scorecard_date=datetime.utcnow().strftime("%Y-%m-%d"),
-                  generated_at=datetime.utcnow().isoformat(),
-                  account_id=os.environ.get("AWS_ACCOUNT_ID", ""),
-                  overall_score=round(overall_score, 2),
-                  overall_trend="STABLE",
-                  framework_scores=[asdict(fs) for fs in framework_scores],
-                  total_evidence_count=len(evidence_list),
-                  critical_count=priority_counts["CRITICAL"],
-                  high_count=priority_counts["HIGH"],
-                  medium_count=priority_counts["MEDIUM"],
-                  low_count=priority_counts["LOW"],
-                  top_5_risks=[],
-                  evidence_by_collector=collector_counts,
-                  remediation_summary={"total": 0, "successful": 0, "failed": 0},
-                  sla_adherence=100.0,
-              )
-              s3_key = f"scorecards/{scorecard.scorecard_date}/scorecard.json"
-              try:
-                  s3.put_object(Bucket=REPORTS_BUCKET, Key=s3_key,
-                  Body=json.dumps(asdict(scorecard), indent=2), ContentType="application/json",
-                  ServerSideEncryption="aws:kms", SSEKeyId=KMS_KEY)
-                  logger.info(f"Scorecard stored to S3: s3://{REPORTS_BUCKET}/{s3_key}")
-              except Exception as e:
-                  logger.error(f"Failed to store scorecard: {e}")
-              if ALERT_TOPIC_ARN:
-                  subject = f"[GRC Daily Digest] Compliance Scorecard - {scorecard.scorecard_date}"
-                  message = f"Overall Score: {scorecard.overall_score}%\nTotal Evidence: {scorecard.total_evidence_count}\nCritical: {scorecard.critical_count}\nHigh: {scorecard.high_count}"
-                  try:
-                      sns.publish(TopicArn=ALERT_TOPIC_ARN, Subject=subject, Message=message)
-                  except Exception as e:
-                      logger.error(f"Failed to send SNS notification: {e}")
-              return {"statusCode": 200, "scorecard_date": scorecard.scorecard_date, "overall_score": scorecard.overall_score}
+        S3Bucket: !Ref EvidenceBucket
+        S3Key: scorecard-generator-package.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-scorecard-generator"

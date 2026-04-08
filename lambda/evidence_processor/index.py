@@ -335,7 +335,7 @@ def store_metadata_to_dynamodb(
             "evidence_path": evidence_record.evidence_path,
             "collector_name": evidence_record.collector_name,
             "remediation_status": evidence_record.remediation_status,
-            "created_at": evidence_record.created_at,
+            "timestamp": evidence_record.created_at,
         }
 
         # Add optional fields

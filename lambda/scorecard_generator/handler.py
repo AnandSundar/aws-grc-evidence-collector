@@ -90,20 +90,23 @@ def query_evidence_last_24h(
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(hours=24)
 
-        # Query using the timestamp GSI
-        paginator = dynamodb_client.get_paginator("query")
+        # Use scan instead of query since GSI only has hash key
+        # Query with BETWEEN requires both hash and range key
+        paginator = dynamodb_client.get_paginator("scan")
 
-        query_params = {
+        scan_params = {
             "TableName": table_name,
-            "IndexName": gsi_name,
-            "KeyConditionExpression": "created_at BETWEEN :start_time AND :end_time",
+            "FilterExpression": "#ts BETWEEN :start_time AND :end_time",
+            "ExpressionAttributeNames": {
+                "#ts": "timestamp"
+            },
             "ExpressionAttributeValues": {
                 ":start_time": {"S": start_time.isoformat()},
                 ":end_time": {"S": end_time.isoformat()},
             },
         }
 
-        for page in paginator.paginate(**query_params):
+        for page in paginator.paginate(**scan_params):
             for item in page.get("Items", []):
                 # Unmarshal DynamoDB item
                 evidence = {}
@@ -115,7 +118,18 @@ def query_evidence_last_24h(
                     elif "L" in value:
                         evidence[key] = [v["S"] for v in value["L"]]
                     elif "M" in value:
-                        evidence[key] = json.loads(value["M"])
+                        # Handle nested map objects
+                        try:
+                            evidence[key] = json.loads(value["M"])
+                        except:
+                            # If JSON parsing fails, create a dict from the M attribute
+                            nested = {}
+                            for mk, mv in value["M"].items():
+                                if "S" in mv:
+                                    nested[mk] = mv["S"]
+                                elif "N" in mv:
+                                    nested[mk] = float(mv["N"])
+                            evidence[key] = nested
                 evidence_list.append(evidence)
 
         logger.info(
@@ -470,20 +484,143 @@ def store_scorecard(
         )
 
 
-def send_daily_digest(
-    sns_client: Any, topic_arn: str, scorecard: ComplianceScorecard
-) -> None:
+def generate_ai_digest_email(
+    bedrock_client: Any, scorecard: ComplianceScorecard, model_id: str = "nvidia.nemotron-nano-12b-v2"
+) -> str:
     """
-    Send daily summary digest via SNS.
+    Generate AI-powered daily digest email using Bedrock.
 
     Args:
-        sns_client: Boto3 SNS client
-        topic_arn: SNS topic ARN
+        bedrock_client: Boto3 Bedrock client
         scorecard: Compliance scorecard
-    """
-    subject = f"[GRC Daily Digest] Compliance Scorecard - {scorecard.scorecard_date}"
+        model_id: Bedrock model ID to use
 
-    # Build framework scores section
+    Returns:
+        AI-generated email content
+    """
+    # Prepare scorecard data as JSON for the AI
+    scorecard_data = {
+        "date": scorecard.scorecard_date,
+        "account": scorecard.account_id,
+        "overall_score": scorecard.overall_score,
+        "overall_trend": scorecard.overall_trend or "STABLE",
+        "framework_scores": [
+            {
+                "name": fs.framework_name,
+                "score": fs.score,
+                "passing": fs.passing,
+                "total": fs.total_tested,
+                "trend": fs.trend or "STABLE"
+            }
+            for fs in scorecard.framework_scores
+        ],
+        "evidence_summary": {
+            "total": scorecard.total_evidence_count,
+            "critical": scorecard.critical_count,
+            "high": scorecard.high_count,
+            "medium": scorecard.medium_count,
+            "low": scorecard.low_count
+        },
+        "top_risks": [
+            {
+                "priority": risk["priority"],
+                "title": risk["finding_title"],
+                "risk_score": risk.get("ai_risk_score"),
+                "status": risk["remediation_status"],
+                "event_time": risk.get("event_time")
+            }
+            for risk in scorecard.top_5_risks
+        ],
+        "remediation": scorecard.remediation_summary,
+        "sla_adherence": scorecard.sla_adherence,
+        "evidence_by_collector": dict(sorted(
+            scorecard.evidence_by_collector.items(),
+            key=lambda x: x[1],
+            reverse=True
+        ))
+    }
+
+    prompt = f"""You are a GRC (Governance, Risk, and Compliance) analyst writing a daily compliance digest email for stakeholders.
+
+Generate a professional, human-readable email digest based on the following compliance scorecard data:
+
+```json
+{json.dumps(scorecard_data, indent=2)}
+```
+
+REQUIREMENTS:
+1. Start with a 2-3 sentence executive summary that highlights the most important information
+2. Use a professional but accessible tone - avoid overly technical jargon
+3. Highlight any items needing attention (critical issues, failed remediations, SLA breaches)
+4. If everything looks good, say so clearly
+5. Keep it concise - this is an email, not a full report
+6. Use plain text formatting with simple bullet points where appropriate
+7. End with a brief call-to-action if needed (e.g., "Review the 2 critical findings in the GRC console")
+8. Include the date and account ID in the header
+
+OUTPUT FORMAT:
+- Plain text email body
+- Use === for section headers
+- Use • for bullet points
+- Keep each section focused and scannable
+- Total length should be under 300 words
+
+Do NOT include markdown code blocks or JSON in your response. Just output the email body text directly."""
+
+    try:
+        # Nemotron uses a chat-completion format
+        response = bedrock_client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "max_tokens": 800,
+                "temperature": 0.3,
+                "top_p": 0.9
+            })
+        )
+        result = json.loads(response["body"].read().decode("utf-8"))
+
+        # Parse the response based on the actual format
+        # Nemotron returns: {"choices": [{"message": {"content": "..."}}]}
+        if "choices" in result and len(result["choices"]) > 0:
+            ai_message = result["choices"][0]["message"]["content"].strip()
+        else:
+            # Fallback to old format in case the response structure is different
+            ai_message = result.get("results", [{}])[0].get("sequence", "").strip()
+
+        # Add footer
+        ai_message += f"""
+
+---
+View detailed scorecard in the GRC Platform console.
+Date: {scorecard.scorecard_date} | Account: {scorecard.account_id}"""
+
+        logger.info(f"{Colors.OKCYAN}AI-generated email created{Colors.ENDC}")
+        return ai_message
+
+    except Exception as e:
+        logger.warning(f"{Colors.WARNING}AI email generation failed: {e}, falling back to template{Colors.ENDC}")
+        # Fallback to template-based email
+        return _generate_template_email(scorecard)
+
+
+def _generate_template_email(scorecard: ComplianceScorecard) -> str:
+    """
+    Generate template-based email as fallback.
+
+    Args:
+        scorecard: Compliance scorecard
+
+    Returns:
+        Template-generated email content
+    """
     framework_section = "\n".join(
         [
             f"  • {fs.framework_name}: {fs.score}% ({fs.passing}/{fs.total_tested} passing) [{fs.trend or 'STABLE'}]"
@@ -491,7 +628,6 @@ def send_daily_digest(
         ]
     )
 
-    # Build top risks section
     risks_section = "\n".join(
         [
             f"  {i+1}. [{risk['priority']}] {risk['finding_title']} "
@@ -500,7 +636,6 @@ def send_daily_digest(
         ]
     )
 
-    # Build collector section
     collector_section = "\n".join(
         [
             f"  • {collector}: {count} records"
@@ -512,7 +647,7 @@ def send_daily_digest(
         ]
     )
 
-    message = f"""
+    return f"""
 GRC Platform - Daily Compliance Digest
 =======================================
 
@@ -558,6 +693,33 @@ SLA ADHERENCE
 
 View detailed scorecard in the GRC Platform console.
 """
+
+
+def send_daily_digest(
+    sns_client: Any,
+    topic_arn: str,
+    scorecard: ComplianceScorecard,
+    bedrock_client: Any = None,
+    use_ai: bool = True
+) -> None:
+    """
+    Send daily summary digest via SNS.
+
+    Args:
+        sns_client: Boto3 SNS client
+        topic_arn: SNS topic ARN
+        scorecard: Compliance scorecard
+        bedrock_client: Boto3 Bedrock client (optional, for AI-generated emails)
+        use_ai: Whether to use AI for email generation (default: True)
+    """
+    subject = f"[GRC Daily Digest] Compliance Scorecard - {scorecard.scorecard_date}"
+
+    # Generate email content
+    if use_ai and bedrock_client is not None:
+        message = generate_ai_digest_email(bedrock_client, scorecard)
+    else:
+        logger.info(f"{Colors.OKCYAN}Using template-based email{Colors.ENDC}")
+        message = _generate_template_email(scorecard)
 
     try:
         sns_client.publish(
@@ -611,6 +773,17 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     s3_client = boto3.client("s3")
     dynamodb_client = boto3.client("dynamodb")
     sns_client = boto3.client("sns")
+
+    # Initialize Bedrock client for AI-generated emails (optional)
+    bedrock_client = None
+    use_ai_email = os.environ.get("USE_AI_EMAIL", "true").lower() == "true"
+    if use_ai_email:
+        try:
+            bedrock_client = boto3.client("bedrock-runtime")
+            logger.info(f"{Colors.OKCYAN}Bedrock client initialized for AI-generated emails{Colors.ENDC}")
+        except Exception as e:
+            logger.warning(f"{Colors.WARNING}Failed to initialize Bedrock client: {e}. Using template emails.{Colors.ENDC}")
+            use_ai_email = False
 
     try:
         # Calculate date ranges
@@ -705,8 +878,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             s3_client, dynamodb_client, scorecard_bucket, scorecard_table, scorecard
         )
 
-        # Send daily digest
-        send_daily_digest(sns_client, sns_topic_arn, scorecard)
+        # Send daily digest (AI-generated if Bedrock is available)
+        send_daily_digest(
+            sns_client,
+            sns_topic_arn,
+            scorecard,
+            bedrock_client=bedrock_client,
+            use_ai=use_ai_email
+        )
 
         logger.info(f"{Colors.OKGREEN}{'='*60}{Colors.ENDC}")
         logger.info(f"{Colors.OKGREEN}Scorecard generated successfully{Colors.ENDC}")
