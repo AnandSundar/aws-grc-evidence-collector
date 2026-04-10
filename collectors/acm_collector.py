@@ -232,7 +232,7 @@ class ACMCollector(BaseCollector):
                 # Log critical and high priority findings
                 if priority in [Priority.CRITICAL.value, Priority.HIGH.value]:
                     self.log_colored(
-                        f"✗ {finding_title}: {days_until_expiry} days remaining",
+                        f"[FAIL] {finding_title}: {days_until_expiry} days remaining",
                         "ERROR" if priority == Priority.CRITICAL.value else "WARNING",
                     )
 

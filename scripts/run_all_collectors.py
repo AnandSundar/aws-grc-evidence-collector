@@ -18,7 +18,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
@@ -68,22 +68,22 @@ def print_colored(message: str, color: str = Colors.RESET) -> None:
 
 def print_success(message: str) -> None:
     """Print a success message in green."""
-    print_colored(f"✓ {message}", Colors.GREEN)
+    print_colored(f"[OK] {message}", Colors.GREEN)
 
 
 def print_error(message: str) -> None:
     """Print an error message in red."""
-    print_colored(f"✗ {message}", Colors.RED)
+    print_colored(f"[FAIL] {message}", Colors.RED)
 
 
 def print_warning(message: str) -> None:
     """Print a warning message in yellow."""
-    print_colored(f"⚠ {message}", Colors.YELLOW)
+    print_colored(f"[WARN] {message}", Colors.YELLOW)
 
 
 def print_info(message: str) -> None:
     """Print an info message in cyan."""
-    print_colored(f"ℹ {message}", Colors.CYAN)
+    print_colored(f"[INFO] {message}", Colors.CYAN)
 
 
 def print_header(message: str) -> None:
@@ -106,7 +106,7 @@ COLLECTORS = [
     "acm_collector",
     "macie_collector",
     "inspector_collector",
-    "cloudtrail_collector",
+    # "cloudtrail_collector",  # TODO: Not implemented yet
 ]
 
 
@@ -191,6 +191,7 @@ class CollectorRunner:
         # Initialize AWS clients
         self.s3_client = self.session.client("s3")
         self.dynamodb_client = self.session.client("dynamodb")
+        self.dynamodb = self.session.resource("dynamodb")
         self.sts_client = self.session.client("sts")
 
         # Get account ID
@@ -330,10 +331,11 @@ class CollectorRunner:
             if not records:
                 return True
 
+            # Get table resource
+            table = self.dynamodb.Table(self.metadata_table)
+
             # Batch write to DynamoDB
-            with self.dynamodb_client.batch_writer(
-                TableName=self.metadata_table, max_retries=3
-            ) as batch:
+            with table.batch_writer() as batch:
                 for i, record in enumerate(records):
                     try:
                         # Convert record to DynamoDB format
@@ -344,33 +346,25 @@ class CollectorRunner:
                         else:
                             record_dict = {"data": str(record)}
 
-                        # Create DynamoDB item
+                        # Create DynamoDB item (use regular dict, not DynamoDB JSON format)
                         item = {
-                            "resource_id": {
-                                "S": f"{collector_name}-{i}-{int(time.time())}"
-                            },
-                            "timestamp": {"S": datetime.now().isoformat()},
-                            "collector_name": {"S": collector_name},
-                            "record_data": {"S": json.dumps(record_dict, default=str)},
+                            "resource_id": f"{collector_name}-{i}-{int(time.time())}",
+                            "timestamp": datetime.now().isoformat(),
+                            "collector_name": collector_name,
+                            "record_data": json.dumps(record_dict, default=str),
                         }
 
                         # Add severity if present
                         if "severity" in record_dict:
-                            item["severity"] = {
-                                "S": str(record_dict["severity"]).upper()
-                            }
+                            item["severity"] = str(record_dict["severity"]).upper()
                         else:
-                            item["severity"] = {"S": "LOW"}
+                            item["severity"] = "LOW"
 
                         # Add resource type if present
                         if "resource_type" in record_dict:
-                            item["resource_type"] = {
-                                "S": str(record_dict["resource_type"])
-                            }
+                            item["resource_type"] = str(record_dict["resource_type"])
                         else:
-                            item["resource_type"] = {
-                                "S": collector_name.replace("_collector", "")
-                            }
+                            item["resource_type"] = collector_name.replace("_collector", "")
 
                         # Add TTL (30 days)
                         import calendar
@@ -378,7 +372,7 @@ class CollectorRunner:
                         expire_at = calendar.timegm(
                             (datetime.now() + timedelta(days=30)).timetuple()
                         )
-                        item["expire_at"] = {"N": str(expire_at)}
+                        item["expire_at"] = expire_at
 
                         batch.put_item(Item=item)
 
@@ -566,7 +560,7 @@ class CollectorRunner:
                 low_str = str(result.low_count)
 
                 if result.status == "Done":
-                    status_str = "✅ Done"
+                    status_str = "[OK] Done"
                 else:
                     status_str = "❌ Failed"
 

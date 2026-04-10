@@ -720,7 +720,7 @@ Resources:
               - Sid: SNSPublish
                 Effect: Allow
                 Action: 'sns:Publish'
-                Resource: !If [HasAlertEmail, !Ref AlertTopic, "arn:aws:sns:::dummy-topic"]
+                Resource: !Ref AlertTopic
               - Sid: EC2Remediation
                 Effect: Allow
                 Action:
@@ -823,7 +823,7 @@ Resources:
               - Sid: SNSPublish
                 Effect: Allow
                 Action: 'sns:Publish'
-                Resource: !If [HasAlertEmail, !Ref AlertTopic, "arn:aws:sns:::dummy-topic"]
+                Resource: !Ref AlertTopic
               - Sid: KMSDecryptEncrypt
                 Effect: Allow
                 Action:
@@ -872,7 +872,7 @@ Resources:
               - Sid: SNSPublish
                 Effect: Allow
                 Action: 'sns:Publish'
-                Resource: !If [HasAlertEmail, !Ref AlertTopic, "arn:aws:sns:::dummy-topic"]
+                Resource: !Ref AlertTopic
               - Sid: KMSDecryptEncrypt
                 Effect: Allow
                 Action:
@@ -932,7 +932,7 @@ Resources:
               - Sid: SNSPublish
                 Effect: Allow
                 Action: 'sns:Publish'
-                Resource: !If [HasAlertEmail, !Ref AlertTopic, "arn:aws:sns:::dummy-topic"]
+                Resource: !Ref AlertTopic
               - Sid: KMSDecryptEncrypt
                 Effect: Allow
                 Action:
@@ -1153,7 +1153,7 @@ Resources:
           ALERT_TOPIC_ARN: !Ref AlertTopic
       Code:
         S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
-        S3Key: grc-evidence-platform-deployment-348342704892-us-east-1/remediation-engine/remediation-engine-20260407-123837.zip
+        S3Key: remediation-engine/remediation-engine-20260408-120751.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-remediation-engine"
@@ -1192,8 +1192,8 @@ Resources:
           USE_AI_EMAIL: "true"
           AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Code:
-        S3Bucket: !Ref EvidenceBucket
-        S3Key: scorecard-generator-package.zip
+        S3Bucket: grc-evidence-platform-cloudtrail-348342704892-us-east-1
+        S3Key: scorecard-generator-package-20260408-121755.zip
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-scorecard-generator"

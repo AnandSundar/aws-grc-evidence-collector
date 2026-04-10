@@ -187,7 +187,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} not encrypted", "WARNING"
+                            f"[FAIL] S3 bucket {bucket_name} not encrypted", "WARNING"
                         )
                     else:
                         raise
@@ -285,7 +285,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} versioning disabled", "WARNING"
+                            f"[FAIL] S3 bucket {bucket_name} versioning disabled", "WARNING"
                         )
 
                 except ClientError as e:
@@ -407,7 +407,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} public access not fully blocked",
+                            f"[FAIL] S3 bucket {bucket_name} public access not fully blocked",
                             "ERROR",
                         )
 
@@ -440,7 +440,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} no public access block", "ERROR"
+                            f"[FAIL] S3 bucket {bucket_name} no public access block", "ERROR"
                         )
                     else:
                         raise
@@ -546,7 +546,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} logging disabled", "WARNING"
+                            f"[FAIL] S3 bucket {bucket_name} logging disabled", "WARNING"
                         )
 
                 except ClientError as e:
@@ -649,7 +649,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"⚠ S3 bucket {bucket_name} no lifecycle policy", "INFO"
+                            f"[WARN] S3 bucket {bucket_name} no lifecycle policy", "INFO"
                         )
 
                 except ClientError as e:
@@ -680,7 +680,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"⚠ S3 bucket {bucket_name} no lifecycle policy", "INFO"
+                            f"[WARN] S3 bucket {bucket_name} no lifecycle policy", "INFO"
                         )
                     else:
                         raise
@@ -774,7 +774,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} MFA delete disabled", "WARNING"
+                            f"[FAIL] S3 bucket {bucket_name} MFA delete disabled", "WARNING"
                         )
 
                 except ClientError as e:
@@ -891,7 +891,7 @@ class S3Collector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ S3 bucket {bucket_name} no default encryption",
+                            f"[FAIL] S3 bucket {bucket_name} no default encryption",
                             "WARNING",
                         )
                     else:

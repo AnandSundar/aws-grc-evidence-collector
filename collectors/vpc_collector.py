@@ -181,7 +181,7 @@ class VPCCollector(BaseCollector):
                         },
                     )
                     records.append(record)
-                    self.log_colored(f"✗ VPC {vpc_id} has no flow logs", "WARNING")
+                    self.log_colored(f"[FAIL] VPC {vpc_id} has no flow logs", "WARNING")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -280,7 +280,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Default security group {sg_id} has rules", "WARNING"
+                                f"[FAIL] Default security group {sg_id} has rules", "WARNING"
                             )
 
         except ClientError as e:
@@ -426,7 +426,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Security group {sg_id} open SSH to world", "ERROR"
+                                f"[FAIL] Security group {sg_id} open SSH to world", "ERROR"
                             )
 
                         # Check RDP port
@@ -459,7 +459,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Security group {sg_id} open RDP to world", "ERROR"
+                                f"[FAIL] Security group {sg_id} open RDP to world", "ERROR"
                             )
 
                         # Check database ports
@@ -494,7 +494,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Security group {sg_id} open {db_name} to world",
+                                f"[FAIL] Security group {sg_id} open {db_name} to world",
                                 "ERROR",
                             )
 
@@ -526,7 +526,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Security group {sg_id} all ports open to world",
+                                f"[FAIL] Security group {sg_id} all ports open to world",
                                 "ERROR",
                             )
 
@@ -560,7 +560,7 @@ class VPCCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Security group {sg_id} open port {from_port} to world",
+                                f"[FAIL] Security group {sg_id} open port {from_port} to world",
                                 "WARNING",
                             )
 
@@ -601,7 +601,7 @@ class VPCCollector(BaseCollector):
                     )
                     records.append(record)
                     self.log_colored(
-                        f"✗ Security group {sg_id} open to IPv6 world", "WARNING"
+                        f"[FAIL] Security group {sg_id} open to IPv6 world", "WARNING"
                     )
 
         except Exception as e:

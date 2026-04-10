@@ -149,7 +149,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} not encrypted", "WARNING"
+                            f"[FAIL] RDS instance {db_id} not encrypted", "WARNING"
                         )
 
         except ClientError as e:
@@ -242,7 +242,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} has no backups", "ERROR"
+                            f"[FAIL] RDS instance {db_id} has no backups", "ERROR"
                         )
 
         except ClientError as e:
@@ -335,7 +335,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} not multi-AZ", "WARNING"
+                            f"[FAIL] RDS instance {db_id} not multi-AZ", "WARNING"
                         )
 
         except ClientError as e:
@@ -428,7 +428,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} is publicly accessible", "ERROR"
+                            f"[FAIL] RDS instance {db_id} is publicly accessible", "ERROR"
                         )
 
         except ClientError as e:
@@ -521,7 +521,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} no auto minor version upgrade",
+                            f"[FAIL] RDS instance {db_id} no auto minor version upgrade",
                             "WARNING",
                         )
 
@@ -614,7 +614,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} no deletion protection", "WARNING"
+                            f"[FAIL] RDS instance {db_id} no deletion protection", "WARNING"
                         )
 
         except ClientError as e:
@@ -696,7 +696,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS instance {db_id} no enhanced monitoring", "INFO"
+                            f"[FAIL] RDS instance {db_id} no enhanced monitoring", "INFO"
                         )
 
         except ClientError as e:
@@ -785,7 +785,7 @@ class RDSCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ RDS instance {db_id} no Performance Insights",
+                                f"[FAIL] RDS instance {db_id} no Performance Insights",
                                 "INFO",
                             )
 
@@ -875,7 +875,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS snapshot {snapshot_id} not encrypted", "WARNING"
+                            f"[FAIL] RDS snapshot {snapshot_id} not encrypted", "WARNING"
                         )
 
             # Check cluster snapshots
@@ -937,7 +937,7 @@ class RDSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ RDS cluster snapshot {snapshot_id} not encrypted",
+                            f"[FAIL] RDS cluster snapshot {snapshot_id} not encrypted",
                             "WARNING",
                         )
 

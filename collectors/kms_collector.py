@@ -184,7 +184,7 @@ class KMSCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"✗ KMS key {key_id} rotation disabled", "WARNING"
+                            f"[FAIL] KMS key {key_id} rotation disabled", "WARNING"
                         )
 
                 except ClientError as e:
@@ -268,7 +268,7 @@ class KMSCollector(BaseCollector):
                         },
                     )
                     records.append(record)
-                    self.log_colored(f"⚠ KMS key {key_id} pending deletion", "WARNING")
+                    self.log_colored(f"[WARN] KMS key {key_id} pending deletion", "WARNING")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -349,7 +349,7 @@ class KMSCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ KMS key {key_id} is {age_days} days old without rotation",
+                                f"[FAIL] KMS key {key_id} is {age_days} days old without rotation",
                                 "WARNING",
                             )
 

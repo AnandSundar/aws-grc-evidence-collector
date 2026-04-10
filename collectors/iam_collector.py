@@ -120,7 +120,7 @@ class IAMCollector(BaseCollector):
                     raw_data={"mfa_devices": mfa_devices},
                 )
                 records.append(record)
-                self.log_colored("✓ Root account MFA is enabled", "SUCCESS")
+                self.log_colored("[OK] Root account MFA is enabled", "SUCCESS")
             else:
                 record = self.make_record(
                     resource_type="AWS::IAM::RootAccount",
@@ -140,7 +140,7 @@ class IAMCollector(BaseCollector):
                     raw_data={"mfa_devices": mfa_devices},
                 )
                 records.append(record)
-                self.log_colored("✗ Root account MFA is NOT enabled", "ERROR")
+                self.log_colored("[FAIL] Root account MFA is NOT enabled", "ERROR")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -227,7 +227,7 @@ class IAMCollector(BaseCollector):
                             raw_data={"has_mfa": False},
                         )
                         records.append(record)
-                        self.log_colored(f"✗ User {user_name} lacks MFA", "WARNING")
+                        self.log_colored(f"[FAIL] User {user_name} lacks MFA", "WARNING")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -379,7 +379,7 @@ class IAMCollector(BaseCollector):
                     )
                     records.append(record)
                     self.log_colored(
-                        f"✗ Password policy has {len(issues)} issues", "WARNING"
+                        f"[FAIL] Password policy has {len(issues)} issues", "WARNING"
                     )
                 else:
                     record = self.make_record(
@@ -399,7 +399,7 @@ class IAMCollector(BaseCollector):
                         raw_data={"policy": policy},
                     )
                     records.append(record)
-                    self.log_colored("✓ Password policy is compliant", "SUCCESS")
+                    self.log_colored("[OK] Password policy is compliant", "SUCCESS")
 
             except ClientError as e:
                 if e.response.get("Error", {}).get("Code") == "NoSuchEntity":
@@ -422,7 +422,7 @@ class IAMCollector(BaseCollector):
                         raw_data={"policy_exists": False},
                     )
                     records.append(record)
-                    self.log_colored("✗ No password policy set", "ERROR")
+                    self.log_colored("[FAIL] No password policy set", "ERROR")
                 else:
                     raise
 
@@ -501,7 +501,7 @@ class IAMCollector(BaseCollector):
                                 )
                                 records.append(record)
                                 self.log_colored(
-                                    f"✗ Key {key_id} is {age_days} days old", "WARNING"
+                                    f"[FAIL] Key {key_id} is {age_days} days old", "WARNING"
                                 )
 
         except ClientError as e:
@@ -589,7 +589,7 @@ class IAMCollector(BaseCollector):
                                         )
                                         records.append(record)
                                         self.log_colored(
-                                            f"✗ Key {key_id} unused for {unused_days} days",
+                                            f"[FAIL] Key {key_id} unused for {unused_days} days",
                                             "WARNING",
                                         )
                             except ClientError as e:
@@ -672,7 +672,7 @@ class IAMCollector(BaseCollector):
                                 )
                                 records.append(record)
                                 self.log_colored(
-                                    f"✗ User {user_name} password unused for {unused_days} days",
+                                    f"[FAIL] User {user_name} password unused for {unused_days} days",
                                     "WARNING",
                                 )
                     except ClientError as e:
@@ -743,7 +743,7 @@ class IAMCollector(BaseCollector):
                         )
                         records.append(record)
                         self.log_colored(
-                            f"⚠ Role {role_name} has never been used", "INFO"
+                            f"[WARN] Role {role_name} has never been used", "INFO"
                         )
 
         except ClientError as e:
@@ -814,7 +814,7 @@ class IAMCollector(BaseCollector):
                                 )
                                 records.append(record)
                                 self.log_colored(
-                                    f"✗ Policy {policy_name} has wildcard actions",
+                                    f"[FAIL] Policy {policy_name} has wildcard actions",
                                     "WARNING",
                                 )
 
@@ -864,7 +864,7 @@ class IAMCollector(BaseCollector):
                             )
                             records.append(record)
                             self.log_colored(
-                                f"✗ Managed policy {policy_name} has wildcard actions",
+                                f"[FAIL] Managed policy {policy_name} has wildcard actions",
                                 "WARNING",
                             )
 
@@ -957,7 +957,7 @@ class IAMCollector(BaseCollector):
                             },
                         )
                         records.append(record)
-                        self.log_colored(f"⚠ Group {group_name} is empty", "INFO")
+                        self.log_colored(f"[WARN] Group {group_name} is empty", "INFO")
 
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")

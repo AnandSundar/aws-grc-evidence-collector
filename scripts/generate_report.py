@@ -66,22 +66,22 @@ def print_colored(message: str, color: str = Colors.RESET) -> None:
 
 def print_success(message: str) -> None:
     """Print a success message in green."""
-    print_colored(f"✓ {message}", Colors.GREEN)
+    print_colored(f"[OK] {message}", Colors.GREEN)
 
 
 def print_error(message: str) -> None:
     """Print an error message in red."""
-    print_colored(f"✗ {message}", Colors.RED)
+    print_colored(f"[FAIL] {message}", Colors.RED)
 
 
 def print_warning(message: str) -> None:
     """Print a warning message in yellow."""
-    print_colored(f"⚠ {message}", Colors.YELLOW)
+    print_colored(f"[WARN] {message}", Colors.YELLOW)
 
 
 def print_info(message: str) -> None:
     """Print an info message in cyan."""
-    print_colored(f"ℹ {message}", Colors.CYAN)
+    print_colored(f"[INFO] {message}", Colors.CYAN)
 
 
 def print_header(message: str) -> None:
@@ -256,8 +256,9 @@ class ReportGenerator:
             filter_expression = None
             expression_values = {}
 
-            # Add time range filter
-            filter_expression = "timestamp BETWEEN :start AND :end"
+            # Add time range filter (timestamp is a reserved keyword, need to escape)
+            filter_expression = "#ts BETWEEN :start AND :end"
+            expression_attribute_names = {"#ts": "timestamp"}
             expression_values[":start"] = {"S": start_time.isoformat()}
             expression_values[":end"] = {"S": end_time.isoformat()}
 
@@ -269,6 +270,7 @@ class ReportGenerator:
             page_iterator = paginator.paginate(
                 TableName=self.metadata_table,
                 FilterExpression=filter_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_values,
             )
 
@@ -329,7 +331,8 @@ class ReportGenerator:
 
             page_iterator = paginator.paginate(
                 TableName=self.scorecard_table,
-                FilterExpression="timestamp BETWEEN :start AND :end",
+                FilterExpression="#ts BETWEEN :start AND :end",
+                ExpressionAttributeNames={"#ts": "timestamp"},
                 ExpressionAttributeValues={
                     ":start": {"S": start_time.isoformat()},
                     ":end": {"S": end_time.isoformat()},
