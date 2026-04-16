@@ -91,7 +91,6 @@ This platform represents a **paradigm shift** from traditional GRC to **GRC Engi
                                                                 │  REMEDIATE  │
                                                                 │             │
                                                                 │ Auto-fix    │
-                                                                │ DRY_RUN     │
                                                                 │ Security    │
                                                                 │ Guardrails  │
                                                                 └─────────────┘
@@ -371,6 +370,24 @@ The platform follows a **serverless, event-driven architecture** built entirely 
   - Alerts on missing evidence
   - Optimizes storage costs
 - **Schedule**: Every hour
+
+<img width="1292" height="770" alt="2026-04-14 09_18_48- GRC Daily Digest  Compliance Scorecard - 2026-04-14 - anandaws0001@gmail com - " src="https://github.com/user-attachments/assets/a11ea1f5-99e7-4de3-a267-7f44212e29e7" />
+
+
+<img width="1274" height="586" alt="2026-04-14 09_19_39- GRC Audit Report  2026-04-05 to 2026-04-12 - anandaws0001@gmail com - Gmail — M" src="https://github.com/user-attachments/assets/197bbbf4-8920-4e88-8b91-01289b2ddf1b" />
+
+
+<img width="1266" height="742" alt="2026-04-14 09_20_06- GRC Audit Report  2026-04-05 to 2026-04-12 - anandaws0001@gmail com - Gmail — M" src="https://github.com/user-attachments/assets/0d82c433-c8af-4e1a-8993-dd30fd89e004" />
+
+
+<img width="1325" height="724" alt="2026-04-14 09_20_36-Cost Explorer _ Billing and Cost Management _ Global — Mozilla Firefox" src="https://github.com/user-attachments/assets/2e9a665b-5892-489b-b1ab-93ed0121c504" />
+
+
+<img width="946" height="737" alt="2026-04-14 09_21_34-" src="https://github.com/user-attachments/assets/cf637e2b-0911-4783-8f79-8a316a845283" />
+
+
+<img width="1680" height="588" alt="2026-04-14 09_22_04-grc_report xlsx - Excel" src="https://github.com/user-attachments/assets/0a2586b5-90f8-42d5-b9de-a2ddd28b51e7" />
+
 
 ### Evidence Collectors (13 Collectors)
 
